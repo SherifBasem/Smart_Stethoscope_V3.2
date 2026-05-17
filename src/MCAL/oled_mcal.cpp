@@ -1,27 +1,6 @@
 #include "oled_mcal.h"
 #include "../HAL/i2c_hal.h"
 
-// ─────────────────────────────────────────────
-//  Global Display Object (I2C mutex protected)
-// ─────────────────────────────────────────────
-class LockedSSD1306 : public Adafruit_SSD1306 {
-public:
-  using Adafruit_SSD1306::Adafruit_SSD1306;
-
-  void display(void) {
-    HAL_I2C_Lock();
-    Adafruit_SSD1306::display();
-    HAL_I2C_Unlock();
-  }
-
-  bool begin(uint8_t vccstate, uint8_t i2caddr, bool reset=true, bool periphBegin=true) {
-    HAL_I2C_Lock();
-    bool ok = Adafruit_SSD1306::begin(vccstate, i2caddr, reset, periphBegin);
-    HAL_I2C_Unlock();
-    return ok;
-  }
-};
-
 LockedSSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, MCAL_OLED_RESET);
 static bool s_oledReady = false;
 

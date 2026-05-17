@@ -7,6 +7,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>
+#include "../HAL/i2c_hal.h"
 
 /* ------ Config ------ */
 #define SCREEN_WIDTH                    128
@@ -36,7 +37,25 @@ enum EasingType {
   EASE_OUT
 };
 
-extern Adafruit_SSD1306 display;
+class LockedSSD1306 : public Adafruit_SSD1306 {
+public:
+  using Adafruit_SSD1306::Adafruit_SSD1306;
+
+  void display(void) {
+    HAL_I2C_Lock();
+    Adafruit_SSD1306::display();
+    HAL_I2C_Unlock();
+  }
+
+  bool begin(uint8_t vccstate, uint8_t i2caddr, bool reset=true, bool periphBegin=true) {
+    HAL_I2C_Lock();
+    bool ok = Adafruit_SSD1306::begin(vccstate, i2caddr, reset, periphBegin);
+    HAL_I2C_Unlock();
+    return ok;
+  }
+};
+
+extern LockedSSD1306 display;
 
 /* ------ API ------ */
 /**

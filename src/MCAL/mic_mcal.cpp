@@ -152,6 +152,10 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue) {
     return true;
 }
 
+bool MCAL_Mic_IsReady(void) {
+    return (s_pcmBuf != nullptr);
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    MCAL_Mic_SetActive
    ═══════════════════════════════════════════════════════════════════ */
