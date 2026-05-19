@@ -16,16 +16,11 @@
 typedef struct { float v; uint8_t pct; } VoltPct_t;
 
 static const VoltPct_t LIPO_TABLE[] = {
-    { 4.15f, 100 },
-    { 4.05f,  90 },
-    { 3.95f,  80 },
-    { 3.88f,  70 },
-    { 3.80f,  60 },
-    { 3.75f,  50 },
-    { 3.68f,  40 },
-    { 3.63f,  30 },
-    { 3.57f,  20 },
-    { 3.50f,  10 },
+    { 3.70f, 100 },
+    { 3.64f,  85 },
+    { 3.58f,  70 },
+    { 3.52f,  55 },
+    { 3.46f,  35 },
     { 3.40f,   0 },
 };
 #define LIPO_TABLE_LEN  (sizeof(LIPO_TABLE) / sizeof(LIPO_TABLE[0]))

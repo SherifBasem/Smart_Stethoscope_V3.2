@@ -77,7 +77,6 @@ typedef enum {
     UI_SCREEN_HEART_MONITOR,
     UI_SCREEN_LUNG_SOUND,           /**< NEW — MAX4466 mic + ML upload     */
     UI_SCREEN_SYSTEM_INFO,
-    UI_SCREEN_SYSTEM_INFO_QR,
     UI_SCREEN_BATTERY_INFO,
     UI_SCREEN_POWER_OFF,
 

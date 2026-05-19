@@ -101,3 +101,14 @@ bool MCAL_Button_GetEvent(ButtonEvent_t *event) {
     if (!s_queue) return false;
     return (xQueueReceive(s_queue, event, 0) == pdTRUE);
 }
+
+void MCAL_Button_Reset(void) {
+    for (int i = 0; i < 4; i++) {
+        s_btn[i].wasPressed = false;
+        s_btn[i].pressedAt  = 0;
+        s_btn[i].heldFired  = false;
+    }
+    if (s_queue) {
+        xQueueReset(s_queue);
+    }
+}

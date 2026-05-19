@@ -56,7 +56,7 @@ flowchart RL
 
 | Sensor | Interface | Sampling period | Normal range | Invalid range | Failure behavior |
 | ------ | --------- | --------------- | ------------ | ------------- | ---------------- |
-| Battery divider (LiPo) | ADC (GPIO4) | 5 s | 3.40–4.15 V | <2.5 V or >4.5 V | Clamp to 2.5–4.5 V, flag low/critical |
+| Battery divider (LiPo) | ADC (GPIO4) | 5 s | 3.40–3.70 V | <3.40 V or >4.5 V | Clamp to 2.5–4.5 V, flag low/critical |
 | MAX4466 Mic | ADC (GPIO3) | 250 µs (4 kHz) | 30–90 dBSPL | <30 dB or >90 dB | Floor/ceiling clamp, clipping flag |
 | MAX30102 | I2C (0x57) | 10 ms (100 Hz) | BPM 30–220, SpO2 70–100% | Outside limits | Mark invalid, reset averages |
 | Buttons (UP/DOWN/SEL/BACK) | GPIO digital | 20 ms poll + ISR | Active-LOW transitions | Stuck high/low | Ignore/retry, UI remains responsive |
@@ -94,6 +94,17 @@ flowchart RL
 | REQ-10 | SYS-07 |
 | REQ-11 | SYS-04 |
 | REQ-12 | SYS-09 |
+
+## UART diagnostics 🧭
+
+### RTOS_STATS (what it does)
+
+The `RTOS_STATS` command calls FreeRTOS `vTaskGetRunTimeStats()` and prints a per-task CPU usage report since boot. This helps you see which tasks consume the most runtime under load (e.g., during `STRESS_ON`). It requires these FreeRTOS config flags to be enabled:
+
+- `configGENERATE_RUN_TIME_STATS = 1`
+- `configUSE_STATS_FORMATTING_FUNCTIONS = 1`
+
+If those flags aren’t enabled, the command will report that runtime stats are unavailable.
 
 ## Components
 
@@ -133,19 +144,19 @@ flowchart RL
 
 ```mermaid
 flowchart LR
-  LIPO[LiPo Battery] --> TP[TP4056 Charger];
+  note[Connect batteries in parallel] -.->  LIPO[LiPo Batteries]
+  LIPO --> TP[TP4056 Charger];
   TP --> BOOST[MT3608 Boost];
-  BOOST --> ESP[ESP32 5V/VIN];
-  ESP --> GND[ESP32 GND];
+  BOOST -. +VOUT -> 5VIN .-> ESP[ESP32];
+  BOOST -. -VOUT -> GND .-> ESP;
 
-  LIPO --> VBAT[VBAT];
-  VBAT --> R1[R1 1k];
-  R1 --> GPIO4[GPIO4 ADC];
-  GPIO4 --> R2[R2 1k];
-  R2 --> GND;
+  LIPO -.-> +ve;
+  LIPO -.-> -ve;  
+  +ve -.-> R1[Resistor 100k];
+  -ve -.-> R2[Resistor 100k];
+  R1 -.GPIO4.-> ESP;
+  R2 -.GPIO4.-> ESP;
 
-  TP -. B+ B- .- LIPO;
-  BOOST -. OUT+ OUT- .- ESP;
 ```
 
 ## Screens
@@ -155,12 +166,12 @@ flowchart
   Boot --> MainMenu[Main menu Screen]
 
   MainMenu --> heart[Heart monitor Screen]
+  MainMenu --> lung[Sound recording Screen]
   MainMenu --> info[System Info Screen]
   MainMenu --> off[Power Off Screen]
   MainMenu --> settings[Settings Screen]
 
   settings --> brightness[Brightness Screen]
-  settings --> inactivity[Inactivity Screen]
   settings --> reboot[Reboot Screen]
   settings --> inactivity[Inactivity Screen]
   settings --> wifi[Wifi Screen]

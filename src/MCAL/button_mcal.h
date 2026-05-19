@@ -63,6 +63,12 @@ void MCAL_Button_Poll(void);
 bool MCAL_Button_GetEvent(ButtonEvent_t *event);
 
 /**
+ * @brief  Reset internal debounce/held state and clear pending events.
+ *         Useful after wake-from-sleep to avoid stuck button states.
+ */
+void MCAL_Button_Reset(void);
+
+/**
  * @brief  Global semaphore used to wake the UI task on SELECT presses.
  *         Defined in Smart_Stethoscope_V3.ino
  */

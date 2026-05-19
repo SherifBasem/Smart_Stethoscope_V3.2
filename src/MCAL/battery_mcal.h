@@ -7,13 +7,12 @@
  * (or 2-cell parallel) LiPo battery monitored via a 2×1 kΩ voltage
  * divider on GPIO4.
  *
- * LiPo voltage map used:
- *   ≥ 4.15 V → 100 %      (fully charged)
- *   4.00 V   →  87 %
- *   3.85 V   →  70 %
- *   3.75 V   →  50 %
- *   3.65 V   →  30 %
- *   3.55 V   →  15 %
+ * LiPo voltage map used (parallel pack, normalized to 3.70 V full):
+ *   ≥ 3.70 V → 100 %      (fully charged / nominal ceiling)
+ *   3.64 V   →  85 %
+ *   3.58 V   →  70 %
+ *   3.52 V   →  55 %
+ *   3.46 V   →  35 %
  *   ≤ 3.40 V →   0 %      (cut-off)
  *
  * Charging detection:
@@ -35,7 +34,7 @@
 /* ------ Config ------ */
 #define BATTERY_POLL_INTERVAL_MS   5000    /**< Re-read ADC every 5 s       */
 #define BATTERY_CHARGE_DELTA_V     0.01f   /**< Voltage rise → charging     */
-#define BATTERY_FULL_V             4.15f   /**< 100 % threshold             */
+#define BATTERY_FULL_V             3.70f   /**< 100 % threshold             */
 #define BATTERY_EMPTY_V            3.40f   /**< 0 %  threshold (cut-off)    */
 #define BATTERY_LOW_THRESHOLD_PCT  20      /**< "Low battery" warning level */
 #define BATTERY_CRITICAL_PCT       10      /**< "Critical" warning level    */

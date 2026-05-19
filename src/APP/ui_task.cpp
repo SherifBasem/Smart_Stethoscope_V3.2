@@ -158,11 +158,8 @@ static bool     s_setupQrReady = false;
 static char     s_lastPortalCredSSID[33] = "";
 static char     s_lastPortalCredPass[64] = "";
 
-static const char *SYSTEM_INFO_URL     = "https://b1fe-156-221-176-248.ngrok-free.app/";
 static const char *SYSTEM_INFO_API_URL = "https://b1fe-156-221-176-248.ngrok-free.app/send_data/";
 static const uint32_t SYSTEM_INFO_POST_INTERVAL_MS = 2000;
-static MCAL_QRCode_t    s_systemInfoQr;
-static bool        s_systemInfoQrReady = false;
 static UIScreen_t  s_systemInfoReturn  = UI_SCREEN_MAIN_MENU;
 static uint32_t    s_lastSystemInfoPostMs = 0;
 
@@ -268,6 +265,16 @@ static void oledHeader(const char *title) {
 
 static inline void oledTitle(const char *title)  { oledHeader(title); }
 static inline void oledDivider(void) { MCAL_OLED_PrintLine(1, "---------------------"); }
+
+static bool isInputLocked(void) {
+    if (s_screen == UI_SCREEN_HEART_MONITOR && s_heartScanState == HEART_SCAN_RUNNING) {
+        return true;
+    }
+    if (s_screen == UI_SCREEN_LUNG_SOUND) {
+        return (MCAL_Mic_GetState() == MIC_STATE_RECORDING);
+    }
+    return false;
+}
 
 static void renderMenu(const char *title,
                        const char *items[],
@@ -773,7 +780,7 @@ static void renderSystemInfo(void) {
     snprintf(line, sizeof(line), " Bat: %.2fV %u%%",
              s_battery.voltageV, s_battery.percent);
     MCAL_OLED_PrintLine(4, line);
-    MCAL_OLED_PrintLine(5, "[SEL]Batt/QR [BCK]Back");
+    MCAL_OLED_PrintLine(5, "[SEL]Battery [BCK]Back");
 
     pushDisplay();
 }
@@ -822,40 +829,6 @@ static void renderBatteryInfo(void) {
     }
 
     pushDisplay();
-}
-
-static void renderSystemInfoQr(void) {
-    if (!s_systemInfoQrReady) {
-        s_systemInfoQrReady = MCAL_QRCode_GenerateText(&s_systemInfoQr, SYSTEM_INFO_URL);
-    }
-    if (!MCAL_OLED_IsReady()) return;
-
-    MCAL_OLED_Clear();
-    if (!s_systemInfoQrReady) {
-        oledHeader(" System QR   ");
-        MCAL_OLED_PrintLine(2, " QR unavailable");
-        MCAL_OLED_PrintLine(4, " [BACK] Return");
-        pushDisplay();
-        return;
-    }
-
-    display.clearDisplay();
-    const uint8_t scale    = 2;
-    const uint8_t qrPixels = QR_UTIL_SIZE * scale;
-    const uint8_t x0       = (SCREEN_WIDTH  - qrPixels) / 2;
-    const uint8_t y0       = (SCREEN_HEIGHT - qrPixels) / 2;
-
-    display.drawRect(x0 - 3, y0 - 3, qrPixels + 6, qrPixels + 6, SSD1306_WHITE);
-    for (uint8_t y = 0; y < QR_UTIL_SIZE; y++) {
-        for (uint8_t x = 0; x < QR_UTIL_SIZE; x++) {
-            if (MCAL_QRCode_GetModule(&s_systemInfoQr, x, y)) {
-                display.fillRect(x0 + x * scale, y0 + y * scale,
-                                 scale, scale, SSD1306_WHITE);
-            }
-        }
-    }
-    drawBatteryIcon();
-    display.display();
 }
 
 static void sendSystemInfoIfNeeded(void) {
@@ -1162,10 +1135,6 @@ static void goTo(UIScreen_t target) {
     if (target == UI_SCREEN_WIFI_SETUP_QR) {
         s_setupQrReady = false;
     }
-    if (target == UI_SCREEN_SYSTEM_INFO_QR) {
-        s_systemInfoQrReady    = false;
-        s_lastSystemInfoPostMs = 0;
-    }
     if (target == UI_SCREEN_WIFI_SCAN) {
         s_scanDone   = false;
         s_scanScroll = 0;
@@ -1230,9 +1199,6 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
 
             case UI_SCREEN_WIFI_SETUP_QR:
                 goTo(UI_SCREEN_WIFI_SETUP); break;
-
-            case UI_SCREEN_SYSTEM_INFO_QR:
-                goTo(UI_SCREEN_SYSTEM_INFO); break;
 
             default: break;
         }
@@ -1414,18 +1380,10 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
         case UI_SCREEN_SYSTEM_INFO:
             if (evt == BTN_EVENT_SELECT_PRESSED) {
                 goTo(UI_SCREEN_BATTERY_INFO);
-            } else if (evt == BTN_EVENT_UP_PRESSED || evt == BTN_EVENT_UP_HELD) {
-                goTo(UI_SCREEN_SYSTEM_INFO_QR);
             }
             break;
 
         case UI_SCREEN_BATTERY_INFO:
-            if (evt == BTN_EVENT_SELECT_PRESSED) {
-                goTo(UI_SCREEN_SYSTEM_INFO_QR);
-            }
-            break;
-
-        case UI_SCREEN_SYSTEM_INFO_QR:
             break;
 
         case UI_SCREEN_WIFI_SETUP:
@@ -1516,8 +1474,10 @@ static void doSleep(TickType_t *lastWake) {
     MCAL_Battery_ForceRefresh();
     MCAL_Battery_GetStatus(&s_battery);
 
-    ButtonEvent_t discard;
-    while (MCAL_Button_GetEvent(&discard)) { /* drop */ }
+    if (g_btnSemaphore) {
+        while (xSemaphoreTake(g_btnSemaphore, 0) == pdTRUE) { /* drop */ }
+    }
+    MCAL_Button_Reset();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1563,7 +1523,11 @@ void UITask(void *pvParams) {
 
         ButtonEvent_t evt;
         bool hadInput = false;
+        bool inputLocked = isInputLocked();
         while (MCAL_Button_GetEvent(&evt)) {
+            if (inputLocked) {
+                continue;
+            }
             resetActivity();
             handleInput(evt, p->wifiStatusQueue);
             hadInput = true;
@@ -1585,10 +1549,9 @@ void UITask(void *pvParams) {
 
         /* ── 4. Inactivity sleep (Lung Sound screen excluded) ── */
         uint32_t timeoutMs = INACTIVITY_OPTIONS_SEC[s_inactivityIdx] * 1000UL;
-        bool allowSleep = (s_screen != UI_SCREEN_SYSTEM_INFO_QR) &&
-                          (s_screen != UI_SCREEN_WIFI_SETUP_QR)  &&
-                          (s_screen != UI_SCREEN_SYSTEM_INFO)     &&
-                          (s_screen != UI_SCREEN_LUNG_SOUND);      /* ← don't sleep mid-recording */
+    bool allowSleep = (s_screen != UI_SCREEN_WIFI_SETUP_QR)  &&
+              (s_screen != UI_SCREEN_SYSTEM_INFO)     &&
+              (s_screen != UI_SCREEN_LUNG_SOUND);      /* ← don't sleep mid-recording */
         if (allowSleep && s_screen != UI_SCREEN_HEART_MONITOR && timeoutMs > 0 &&
             ((uint32_t)millis() - s_lastActivityMs) >= timeoutMs) {
             doSleep(&lastWake);
@@ -1649,10 +1612,6 @@ void UITask(void *pvParams) {
                 renderBatteryInfo();
                 break;
 
-            case UI_SCREEN_SYSTEM_INFO_QR:
-                sendSystemInfoIfNeeded();
-                if (screenChanged || hadInput) renderSystemInfoQr();
-                break;
 
             case UI_SCREEN_POWER_OFF:
                 if (screenChanged || hadInput) renderPowerOff();
