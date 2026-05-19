@@ -24,6 +24,15 @@ static TaskTimingStats_t s_timing = {
     0
 };
 static int64_t s_lastTickUs = 0;
+static TaskHandle_t s_uploadTaskHandle = NULL;
+static TaskHandle_t s_micTaskHandle = NULL;
+
+static void MicUploadTask(void *pvParams) {
+    (void)pvParams;
+    MCAL_Mic_UploadRecording();
+    s_uploadTaskHandle = NULL;
+    vTaskDelete(NULL);
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    MicTask_SetActive
@@ -51,6 +60,10 @@ void MicTask(void *pvParams) {
     HAL_UART_SendLine("[Mic] Task running (ADC idle until screen opens).");
 
     for (;;) {
+        if (MCAL_Mic_GetState() == MIC_STATE_UPLOADING) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
         if (s_active) {
             /*
              * Precision timing using esp_timer_get_time() (µs resolution).
@@ -147,7 +160,32 @@ TaskHandle_t MicTask_Start(MicTask_Params_t *params) {
 
     if (!handle) {
         HAL_UART_SendLine("[Mic] FATAL: task creation failed!");
+    } else {
+        s_micTaskHandle = handle;
     }
 
     return handle;
+}
+
+bool MicTask_StartUpload(void) {
+    if (s_uploadTaskHandle) return false;
+    if (!MCAL_Mic_IsReady()) return false;
+
+    BaseType_t ok = xTaskCreatePinnedToCore(
+        MicUploadTask,
+        "Mic_Upload",
+        MIC_UPLOAD_TASK_STACK_SIZE,
+        NULL,
+        1,
+        &s_uploadTaskHandle,
+        1
+    );
+
+    if (ok != pdPASS) {
+        s_uploadTaskHandle = NULL;
+        HAL_UART_SendLine("[Mic] Upload task creation failed.");
+        return false;
+    }
+
+    return true;
 }

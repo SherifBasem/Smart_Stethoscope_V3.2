@@ -112,3 +112,9 @@ void MCAL_Button_Reset(void) {
         xQueueReset(s_queue);
     }
 }
+
+void MCAL_Button_ReinitPins(void) {
+    for (int i = 0; i < 4; i++) {
+        HAL_GPIO_Init(BTN_PINS[i], HAL_GPIO_MODE_INPUT_PULLUP);
+    }
+}

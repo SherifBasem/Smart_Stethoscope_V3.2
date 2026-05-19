@@ -57,7 +57,7 @@
 #include "task_timing.h"
 
 /* ------ Config ------ */
-#define UI_TASK_STACK_SIZE      8192   /* Increased: lung sound render needs extra stack */
+#define UI_TASK_STACK_SIZE      4096   /* Reduced to free heap for WiFi */
 #define UI_TASK_PRIORITY        2
 #define UI_TASK_CORE            1
 #define UI_POLL_INTERVAL_MS     20

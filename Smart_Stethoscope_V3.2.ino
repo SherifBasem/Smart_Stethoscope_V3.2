@@ -104,20 +104,24 @@ void setup() {
     uartParams.wifiStatusQueue = g_wifiStatusQueue;
     uartParams.heartQueue      = NULL;
 
-    /* ── 7. Heart task first (so queue handle is available) ── */
+    /* ── 7. WiFi task early (maximize heap before other tasks) ── */
+    HAL_UART_Printf("[BOOT] Free heap before WiFi task: %u\r\n", ESP.getFreeHeap());
+    g_wifiTaskHandle = WiFiTask_Start(&wifiParams);
+    HAL_UART_Printf("[BOOT] Free heap after WiFi task: %u\r\n", ESP.getFreeHeap());
+
+    /* ── 8. Heart task ── */
     g_heartTaskHandle = HeartTask_Start(&heartParams);
     g_heartQueue = heartParams.heartQueue;
 
     uiParams.heartQueue   = g_heartQueue;
     uartParams.heartQueue = g_heartQueue;
 
-    /* ── 8. Mic task ── */
+    /* ── 9. Mic task ── */
     g_micTaskHandle = MicTask_Start(&micParams);
     g_micLiveQueue = micParams.micLiveQueue;
     uiParams.micLiveQueue = g_micLiveQueue;
 
-    /* ── 9. Remaining tasks ── */
-    g_wifiTaskHandle = WiFiTask_Start(&wifiParams);
+    /* ── 10. Remaining tasks ── */
     g_uiTaskHandle = UITask_Start(&uiParams);
 
     uartParams.uiTaskHandle    = g_uiTaskHandle;

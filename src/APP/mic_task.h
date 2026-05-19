@@ -37,6 +37,7 @@
 #define MIC_TASK_STACK_SIZE  4096
 #define MIC_TASK_PRIORITY    3         /**< Highest data-task priority       */
 #define MIC_TASK_CORE        0         /**< Core 0 alongside WiFi/UART/Heart */
+#define MIC_UPLOAD_TASK_STACK_SIZE  8192
 
 /* Interval in FreeRTOS ticks for the 4 kHz sampling loop.
    portTICK_PERIOD_MS is typically 1 ms on ESP32, so this gives 1-tick
@@ -60,6 +61,12 @@ void MicTask(void *pvParams);
  * @return Task handle (NULL on failure)
  */
 TaskHandle_t MicTask_Start(MicTask_Params_t *params);
+
+/**
+ * @brief  Start a one-shot upload task (non-blocking for UI).
+ * @return true if started, false if already running or not ready.
+ */
+bool MicTask_StartUpload(void);
 
 /**
  * @brief  Enable or disable ADC sampling.

@@ -32,9 +32,8 @@ static inline void HAL_WiFiRadio_Init(void) {
     WiFi.mode(WIFI_STA);
     // Set max TX power to 40 (~20 dBm) to fix connectivity issues
     esp_wifi_set_max_tx_power(40);
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);
 
-    WiFi.disconnect(true);   /* flush any stale connection */
+    WiFi.disconnect(false);  /* flush any stale connection without power-down */
     delay(100);
 }
 /**
@@ -70,7 +69,7 @@ static inline WiFi_Status_t HAL_WiFiRadio_Status(void) {
  * @brief  Disconnect and power down the WiFi radio.
  */
 static inline void HAL_WiFiRadio_Disconnect(void) {
-    WiFi.disconnect(true);
+    WiFi.disconnect(false);
 }
 /**
  * @brief  Return the assigned IP address as a string.

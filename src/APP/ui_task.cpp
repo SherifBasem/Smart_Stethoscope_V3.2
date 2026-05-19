@@ -1270,8 +1270,8 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
                         break;
 
                     case MIC_STATE_DONE:
-                        /* Upload to ML API (blocking on UI_Task — brief) */
-                        MCAL_Mic_UploadRecording();
+                        /* Upload to ML API (async) */
+                        MicTask_StartUpload();
                         s_lungDirty = true;
                         break;
 
@@ -1477,6 +1477,7 @@ static void doSleep(TickType_t *lastWake) {
     if (g_btnSemaphore) {
         while (xSemaphoreTake(g_btnSemaphore, 0) == pdTRUE) { /* drop */ }
     }
+    MCAL_Button_ReinitPins();
     MCAL_Button_Reset();
 }
 

@@ -69,6 +69,11 @@ bool MCAL_Button_GetEvent(ButtonEvent_t *event);
 void MCAL_Button_Reset(void);
 
 /**
+ * @brief  Re-initialize button GPIO pins (pull-ups) after sleep.
+ */
+void MCAL_Button_ReinitPins(void);
+
+/**
  * @brief  Global semaphore used to wake the UI task on SELECT presses.
  *         Defined in Smart_Stethoscope_V3.ino
  */

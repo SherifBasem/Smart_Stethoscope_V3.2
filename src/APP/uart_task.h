@@ -25,7 +25,7 @@
 #include "../MCAL/heart_mcal.h"
 
 /* ------ Config ------ */
-#define UART_TASK_STACK_SIZE  4096
+#define UART_TASK_STACK_SIZE  3072
 #define UART_TASK_PRIORITY    1
 #define UART_TASK_CORE        0
 #define UART_POLL_INTERVAL_MS 50

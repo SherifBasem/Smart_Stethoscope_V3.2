@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stethoscope Uploads</title>
+  <style>
+    :root {
+      --bg: #f6f3ee;
+      --ink: #1e1a16;
+      --accent: #d04f2e;
+      --panel: #ffffff;
+      --border: #d7d0c7;
+      --muted: #6b5f52;
+    }
+    body {
+      margin: 0;
+      font-family: "Georgia", "Times New Roman", serif;
+      background: radial-gradient(1200px 600px at 10% -20%, #fbe9d6, var(--bg));
+      color: var(--ink);
+    }
+    header {
+      padding: 28px 24px 10px;
+      text-align: center;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      letter-spacing: 0.5px;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 20px 24px 48px;
+    }
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 8px 24px rgba(23, 18, 13, 0.08);
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px 16px;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+    .label {
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .empty {
+      padding: 16px;
+      text-align: center;
+      color: var(--muted);
+    }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 14px 0 32px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Smart Stethoscope Uploads</h1>
+    <p>Showing last {{ max_records }} payloads posted to <span class="label">/predict</span></p>
+  </header>
+  <main>
+    <div class="grid">
+      {% if records %}
+        {% for r in records %}
+          <div class="card">
+            <div><strong>Received:</strong> {{ r.ts }}</div>
+            <div class="meta">
+              <div><span class="label">Sample rate:</span> {{ r.sample_rate }}</div>
+              <div><span class="label">Channels:</span> {{ r.channels }}</div>
+              <div><span class="label">Encoding:</span> {{ r.encoding }}</div>
+              <div><span class="label">Duration:</span> {{ r.duration_ms }} ms</div>
+              <div><span class="label">PCM bytes:</span> {{ r.pcm_bytes }}</div>
+            </div>
+            <div style="margin-top:12px;">
+              <audio controls preload="none" src="/audio/{{ r.id }}.wav"></audio>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="card empty">No uploads yet.</div>
+      {% endif %}
+    </div>
+  </main>
+  <footer>
+    Dummy Flask receiver for ESP32 uploads
+  </footer>
+</body>
+</html>

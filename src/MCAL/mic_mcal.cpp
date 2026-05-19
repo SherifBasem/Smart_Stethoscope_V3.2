@@ -15,7 +15,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    ML API endpoint — update to your deployed model URL
    ═══════════════════════════════════════════════════════════════════ */
-#define MIC_ML_API_URL   "https://your-ml-model-api.example.com/predict"
+#define MIC_ML_API_URL   "http://192.168.1.4:5000/predict"
 
 /* ═══════════════════════════════════════════════════════════════════
    Static PCM recording buffer
@@ -129,13 +129,26 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue) {
         }
     }
 
-    /* Fallback: internal heap with reduced capacity (30 s) */
+    /* Fallback: internal heap with reduced capacity (adaptive) */
     if (!s_pcmBuf) {
-        uint32_t fallbackSamples = MIC_SAMPLE_RATE_HZ * 30;
+        uint32_t freeHeap = ESP.getFreeHeap();
+        const uint32_t reserve = 80 * 1024; /* keep headroom for WiFi/RTOS */
+        uint32_t maxBytes = (freeHeap > reserve) ? (freeHeap - reserve) : 0;
+        uint32_t maxSamples = maxBytes / sizeof(int16_t);
+        uint32_t targetSamples = MIC_SAMPLE_RATE_HZ * 10; /* 10 s target */
+        uint32_t fallbackSamples = (maxSamples < targetSamples) ? maxSamples : targetSamples;
+
+        if (fallbackSamples < (MIC_SAMPLE_RATE_HZ * 5)) {
+            HAL_UART_Printf("[Mic] FATAL: insufficient heap for PCM buffer (free=%lu).\r\n",
+                             (unsigned long)freeHeap);
+            return false;
+        }
+
         s_pcmBuf = (int16_t *)malloc(fallbackSamples * sizeof(int16_t));
         if (s_pcmBuf) {
             s_pcmCapacity = fallbackSamples;
-            HAL_UART_Printf("[Mic] PCM buffer in heap (30 s). No PSRAM.\r\n");
+            HAL_UART_Printf("[Mic] PCM buffer in heap (%lu s). No PSRAM.\r\n",
+                             (unsigned long)(fallbackSamples / MIC_SAMPLE_RATE_HZ));
         } else {
             HAL_UART_SendLine("[Mic] FATAL: PCM buffer allocation failed!");
             return false;
@@ -352,52 +365,25 @@ void MCAL_Mic_UploadRecording(void) {
     HAL_UART_Printf("[Mic] Uploading %lu samples to ML API...\r\n",
                      (unsigned long)s_recIdx);
 
-    /* Base64 encode the PCM buffer */
     size_t   pcmBytes  = s_recIdx * sizeof(int16_t);
-    size_t   b64Len    = ((pcmBytes + 2) / 3) * 4 + 1;
-    char    *b64Buf    = (char *)malloc(b64Len);
-    if (!b64Buf) {
-        HAL_UART_SendLine("[Mic] Upload FAILED: out of memory for base64.");
-        s_state = MIC_STATE_UPLOAD_ERR;
-        return;
-    }
-
-    base64Encode((const uint8_t *)s_pcmBuf, pcmBytes, b64Buf, b64Len);
-
     uint32_t durMs = (s_recIdx * 1000UL) / MIC_SAMPLE_RATE_HZ;
 
-    /* Build JSON — allocate on heap because it can be large */
-    /* Header is ~120 chars; base64 is pcmBytes*4/3 bytes  */
-    size_t jsonLen = 160 + b64Len;
-    char  *json    = (char *)malloc(jsonLen);
-    if (!json) {
-        free(b64Buf);
-        HAL_UART_SendLine("[Mic] Upload FAILED: out of memory for JSON.");
-        s_state = MIC_STATE_UPLOAD_ERR;
-        return;
-    }
+    HAL_UART_Printf("[Mic] Upload bytes=%lu samples=%lu duration=%lu ms\r\n",
+                     (unsigned long)pcmBytes,
+                     (unsigned long)s_recIdx,
+                     (unsigned long)durMs);
 
-    snprintf(json, jsonLen,
-             "{\"sample_rate\":%d,\"channels\":1,"
-             "\"encoding\":\"pcm_s16le\","
-             "\"duration_ms\":%lu,"
-             "\"audio_b64\":\"%s\"}",
-             MIC_SAMPLE_RATE_HZ,
-             (unsigned long)durMs,
-             b64Buf);
-
-    free(b64Buf);
-    b64Buf = nullptr;
-
-    /* HTTP POST */
+    /* HTTP POST: raw PCM streaming to avoid large heap allocations */
     HTTPClient http;
     http.begin(MIC_ML_API_URL);
-    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Content-Type", "application/octet-stream");
+    http.addHeader("X-Sample-Rate", String(MIC_SAMPLE_RATE_HZ));
+    http.addHeader("X-Channels", "1");
+    http.addHeader("X-Encoding", "pcm_s16le");
+    http.addHeader("X-Duration-Ms", String(durMs));
     http.setTimeout(30000);   /* 30 s — large payload */
 
-    int httpCode = http.POST((uint8_t *)json, strlen(json));
-    free(json);
-    json = nullptr;
+    int httpCode = http.sendRequest("POST", (uint8_t *)s_pcmBuf, pcmBytes);
 
     if (httpCode == 200 || httpCode == 201) {
         String body = http.getString();
