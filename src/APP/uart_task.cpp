@@ -364,6 +364,12 @@ static void processCommand(const char *raw, const UARTTask_Params_t *p)
     MCAL_UART_Respond("[ERR] Unknown command: %s  (try HELP)", token);
 }
 
+#ifdef UNIT_TEST
+void UARTTask_Test_ProcessCommand(const char *raw, const UARTTask_Params_t *p) {
+    processCommand(raw, p);
+}
+#endif
+
 /* ═══════════════════════════════════════════════════════════════════
    Task
    ═══════════════════════════════════════════════════════════════════ */

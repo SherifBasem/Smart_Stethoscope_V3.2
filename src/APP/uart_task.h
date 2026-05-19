@@ -45,4 +45,8 @@ extern void UITask_SetWiFiCredentials(const char *ssid, const char *pass);
 void UARTTask(void *pvParams);
 TaskHandle_t UARTTask_Start(UARTTask_Params_t *params);
 
+#ifdef UNIT_TEST
+void UARTTask_Test_ProcessCommand(const char *raw, const UARTTask_Params_t *p);
+#endif
+
 #endif /* UART_TASK_H */

@@ -5,6 +5,7 @@
  */
 
 #include "mic_mcal.h"
+#include "mic_math.h"
 #include "../HAL/mic_hal.h"
 #include "../HAL/uart_hal.h"
 #include <math.h>
@@ -87,29 +88,6 @@ static size_t base64Encode(const uint8_t *in, size_t inLen,
     }
     out[outIdx] = '\0';
     return outIdx;
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   dBSPL helper
-   Full-scale RMS → dBFS then remapped to a 0-100 % bar value.
-   ═══════════════════════════════════════════════════════════════════ */
-static float rmsToDB(int64_t sumSq, uint32_t n) {
-    if (n == 0) return MIC_DB_FLOOR;
-    float rms = sqrtf((float)sumSq / (float)n);
-    if (rms < 1.0f) return MIC_DB_FLOOR;
-    /* dBFS: 0 dBFS when rms == 2048 (half full-scale, typical max for AC mic) */
-    float db = 20.0f * log10f(rms / 2048.0f) + 90.0f; /* shift so 0 dBFS = 90 dBSPL */
-    if (db < MIC_DB_FLOOR) db = MIC_DB_FLOOR;
-    if (db > MIC_DB_CEIL)  db = MIC_DB_CEIL;
-    return db;
-}
-
-static uint8_t dbToPercent(float db) {
-    float range = MIC_DB_CEIL - MIC_DB_FLOOR;
-    float pct   = (db - MIC_DB_FLOOR) / range * 100.0f;
-    if (pct < 0.0f)   pct = 0.0f;
-    if (pct > 100.0f) pct = 100.0f;
-    return (uint8_t)pct;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -251,8 +229,8 @@ void MCAL_Mic_Tick(void) {
     /* ── 4. Publish live reading every MIC_LIVE_WINDOW_SAMPLES ── */
     if (s_windowIdx >= MIC_LIVE_WINDOW_SAMPLES) {
         MicLiveReading_t live;
-        live.dbSPL      = rmsToDB(s_windowSumSq, s_windowIdx);
-        live.barPercent = dbToPercent(live.dbSPL);
+    live.dbSPL      = MCAL_Mic_RmsToDb(s_windowSumSq, s_windowIdx);
+    live.barPercent = MCAL_Mic_DbToPercent(live.dbSPL);
         live.peakAmp    = s_windowPeak;
         live.clipping   = (s_windowPeak >= 2040);   /* near ADC saturation */
 

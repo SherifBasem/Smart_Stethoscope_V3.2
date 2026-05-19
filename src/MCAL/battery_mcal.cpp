@@ -5,29 +5,13 @@
  */
 
 #include "battery_mcal.h"
+#include "battery_math.h"
 #include "../HAL/battery_hal.h"
 #include "../HAL/uart_hal.h"
 
 /* ═══════════════════════════════════════════════════════════════════
-   LiPo voltage → percentage lookup table
-   Values measured empirically for a standard 1-cell LiPo under
-   ~100 mA discharge.  Linear interpolation is applied between points.
-   ═══════════════════════════════════════════════════════════════════ */
-typedef struct { float v; uint8_t pct; } VoltPct_t;
-
-static const VoltPct_t LIPO_TABLE[] = {
-    { 3.70f, 100 },
-    { 3.64f,  85 },
-    { 3.58f,  70 },
-    { 3.52f,  55 },
-    { 3.46f,  35 },
-    { 3.40f,   0 },
-};
-#define LIPO_TABLE_LEN  (sizeof(LIPO_TABLE) / sizeof(LIPO_TABLE[0]))
-
-/* ═══════════════════════════════════════════════════════════════════
-   Private state
-   ═══════════════════════════════════════════════════════════════════ */
+    Private state
+    ═══════════════════════════════════════════════════════════════════ */
 static BatteryStatus_t s_status     = { 0.0f, 0, BATTERY_STATE_UNKNOWN, false, false };
 static float           s_prevV      = 0.0f;
 static uint32_t        s_lastPollMs = 0;
@@ -38,24 +22,6 @@ static int32_t         s_forcedRaw  = -1;
    Helpers
    ═══════════════════════════════════════════════════════════════════ */
 
-/** Linear interpolation between two points */
-static uint8_t voltToPct(float v) {
-    if (v >= LIPO_TABLE[0].v)                           return 100;
-    if (v <= LIPO_TABLE[LIPO_TABLE_LEN - 1].v)         return 0;
-
-    for (uint8_t i = 0; i < LIPO_TABLE_LEN - 1; i++) {
-        if (v <= LIPO_TABLE[i].v && v > LIPO_TABLE[i + 1].v) {
-            float vHigh = LIPO_TABLE[i].v;
-            float vLow  = LIPO_TABLE[i + 1].v;
-            uint8_t pHigh = LIPO_TABLE[i].pct;
-            uint8_t pLow  = LIPO_TABLE[i + 1].pct;
-            float t = (v - vLow) / (vHigh - vLow);
-            return (uint8_t)(pLow + t * (pHigh - pLow) + 0.5f);
-        }
-    }
-    return 0;
-}
-
 static void doSample(void) {
     uint16_t raw = (s_forcedRaw >= 0) ? (uint16_t)s_forcedRaw
                                       : HAL_BatteryAdc_ReadRaw();
@@ -65,7 +31,7 @@ static void doSample(void) {
     if (v < 2.5f) v = 2.5f;
     if (v > 4.5f) v = 4.5f;
 
-    uint8_t pct = voltToPct(v);
+    uint8_t pct = MCAL_Battery_VoltToPct(v);
 
     /* Charging detection: voltage rising by more than delta */
     BatteryState_t state;

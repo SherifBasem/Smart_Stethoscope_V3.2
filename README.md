@@ -84,7 +84,7 @@ flowchart RL
 | ------ | -------- |
 | REQ-01 | SYS-08 |
 | REQ-02 | INT-04, SYS-01 |
-| REQ-03 | SYS-05, FAULT-01 |
+| REQ-03 | UNIT-01, SYS-05, FAULT-01 |
 | REQ-04 | INT-02, SYS-02 |
 | REQ-05 | UNIT-04, INT-03 |
 | REQ-06 | INT-04, INT-05 |
@@ -94,6 +94,19 @@ flowchart RL
 | REQ-10 | SYS-07 |
 | REQ-11 | SYS-04 |
 | REQ-12 | SYS-09 |
+
+### Host Unit Tests (UNIT-01…UNIT-04)
+
+| Test ID | Coverage | Location |
+| ------- | -------- | -------- |
+| UNIT-01 | Battery voltage → percent mapping | `tests/test_battery.cpp` |
+| UNIT-02 | Mic RMS→dB and dB→percent conversions | `tests/test_mic.cpp` |
+| UNIT-03 | UART command parser edge cases | `tests/test_uart_parser.cpp` |
+| UNIT-04 | WiFi state machine transitions | `tests/test_wifi_state.cpp` |
+
+### Test Automation Scripts
+
+`tools/test_runner` contains lightweight Python utilities for UART command execution, log parsing, and CSV reporting. See `tools/test_runner/README.md` for usage.
 
 ## UART diagnostics 🧭
 
