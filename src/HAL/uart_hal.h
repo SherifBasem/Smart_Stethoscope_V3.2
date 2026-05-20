@@ -11,6 +11,8 @@
 #define UART_HAL_H
 
 #include <Arduino.h>
+#include <cstdarg>
+#include <cstdio>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
