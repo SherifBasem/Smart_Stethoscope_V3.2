@@ -10,6 +10,7 @@
 #include "heart_task.h"
 #include "ui_task.h"
 #include "wifi_task.h"
+#include "integration_test.h"
 #include "../HAL/i2c_hal.h"
 #include <esp_system.h>
 #include <esp_timer.h>
@@ -117,6 +118,8 @@ static void processCommand(const char *raw, const UARTTask_Params_t *p)
         MCAL_UART_Respond("  RACE_UNSAFE      - shared counter demo");
         MCAL_UART_Respond("  RACE_SAFE        - shared counter w/ mutex");
         MCAL_UART_Respond("  PRIO_INV         - priority inversion demo");
+        MCAL_UART_Respond("  INT <1-7>        - integration test step");
+        MCAL_UART_Respond("  INT_ALL          - run all integration steps");
         MCAL_UART_Respond("  REBOOT           - software reset");
         return;
     }
@@ -253,6 +256,42 @@ static void processCommand(const char *raw, const UARTTask_Params_t *p)
                           (unsigned long)s_timing.target_period_us,
                           (unsigned long)s_timing.max_jitter_us,
                           (unsigned long)s_timing.missed_deadlines);
+        return;
+    }
+
+    /* ── INT <step> ── */
+    if (strcasecmp(token, "INT") == 0) {
+        char *arg = strtok(NULL, " ");
+        if (!arg) {
+            MCAL_UART_Respond("[INT] Usage: INT <1-7> or INT_ALL");
+            return;
+        }
+        IntegrationTest_Context_t ctx = {
+            p->heartQueue,
+            p->micLiveQueue,
+            p->wifiStatusQueue,
+            p->uiTaskHandle,
+            p->wifiTaskHandle,
+            p->heartTaskHandle,
+            p->micTaskHandle
+        };
+        uint8_t step = (uint8_t)atoi(arg);
+        IntegrationTest_RunStep(step, &ctx);
+        return;
+    }
+
+    /* ── INT_ALL ── */
+    if (strcasecmp(token, "INT_ALL") == 0) {
+        IntegrationTest_Context_t ctx = {
+            p->heartQueue,
+            p->micLiveQueue,
+            p->wifiStatusQueue,
+            p->uiTaskHandle,
+            p->wifiTaskHandle,
+            p->heartTaskHandle,
+            p->micTaskHandle
+        };
+        IntegrationTest_RunAll(&ctx);
         return;
     }
 

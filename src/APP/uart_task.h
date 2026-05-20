@@ -34,6 +34,7 @@
 typedef struct {
     QueueHandle_t wifiStatusQueue;
     QueueHandle_t heartQueue;
+    QueueHandle_t micLiveQueue;
     TaskHandle_t  uiTaskHandle;
     TaskHandle_t  wifiTaskHandle;
     TaskHandle_t  heartTaskHandle;
