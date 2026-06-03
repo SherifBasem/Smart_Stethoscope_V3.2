@@ -6,6 +6,7 @@
 
 #include "wifi_mcal.h"
 #include "captive_portal_mcal.h"
+#include "../stetho_config.h"
 #include "../HAL/nvs_hal.h"
 #include "../HAL/uart_hal.h"   /* for debug logging */
 #include <ESPmDNS.h>
@@ -22,9 +23,13 @@ static void startStaMdns(void) {
     MDNS.end();
     if (MDNS.begin(PORTAL_MDNS_HOST)) {
         MDNS.addService("http", "tcp", 80);
+#if STETHO_DEBUG_LOGS
         HAL_UART_SendLine("[WiFi] mDNS ready at http://myesp.local/");
+#endif
     } else {
+#if STETHO_DEBUG_LOGS
         HAL_UART_SendLine("[WiFi] mDNS start failed.");
+#endif
     }
 }
 
@@ -69,7 +74,9 @@ void MCAL_WiFi_Connect(const char *ssid, const char *password) {
     s_state       = WIFI_STATE_CONNECTING;
     s_connectStart = (uint32_t)millis();
     HAL_WiFiRadio_Begin(s_ssid, s_pass);
+#if STETHO_DEBUG_LOGS
     HAL_UART_Printf("[WiFi] Connecting to \"%s\"...\r\n", s_ssid);
+#endif
     pushStatus();
 }
 
@@ -79,7 +86,9 @@ bool MCAL_WiFi_ConnectSaved(void) {
     if (!HAL_NVS_LoadWiFi(ssid, sizeof(ssid), pass, sizeof(pass))) {
         return false;
     }
+#if STETHO_DEBUG_LOGS
     HAL_UART_Printf("[WiFi] Loaded saved credentials for \"%s\".\r\n", ssid);
+#endif
     MCAL_WiFi_Connect(ssid, pass);
     return true;
 }
@@ -110,7 +119,9 @@ void MCAL_WiFi_Disconnect(void) {
     MCAL_Portal_Stop();
     HAL_WiFiRadio_Disconnect();
     s_state = WIFI_STATE_DISCONNECTED;
+#if STETHO_DEBUG_LOGS
     HAL_UART_SendLine("[WiFi] Disconnected.");
+#endif
     pushStatus();
 }
 
@@ -120,7 +131,9 @@ void MCAL_WiFi_ClearSavedCredentials(void) {
     s_ssid[0] = '\0';
     s_pass[0] = '\0';
     pushStatus();
+#if STETHO_DEBUG_LOGS
     HAL_UART_SendLine("[WiFi] Saved credentials cleared.");
+#endif
 }
 
 /* ───────────────────────── Tick ─────────────────────────────────── */
@@ -131,8 +144,10 @@ void MCAL_WiFi_Tick(void) {
             PortalCredentials_t creds;
             if (MCAL_Portal_ConsumeCredentials(&creds)) {
                 MCAL_Portal_Stop();
+#if STETHO_DEBUG_LOGS
                 HAL_UART_Printf("[WiFi] Portal submitted \"%s\". Connecting...\r\n",
                                  creds.ssid);
+#endif
                 MCAL_WiFi_Connect(creds.ssid, creds.pass);
             }
         }
@@ -147,8 +162,10 @@ void MCAL_WiFi_Tick(void) {
         s_state = WIFI_STATE_CONNECTED;
         char ip[16];
         HAL_WiFiRadio_GetIP(ip, sizeof(ip));
-        HAL_UART_Printf("[WiFi] Connected! IP: %s  RSSI: %d dBm\r\n",
+#if STETHO_DEBUG_LOGS
+        HAL_UART_Printf("[WiFi] Connected! IP: %s RSSI: %d dBm\r\n",
                          ip, HAL_WiFiRadio_GetRSSI());
+#endif
         startStaMdns();
         pushStatus();
         return;
@@ -164,7 +181,9 @@ void MCAL_WiFi_Tick(void) {
             HAL_WiFiRadio_Begin(s_ssid, s_pass);
         } else {
             s_state = WIFI_STATE_FAILED;
+#if STETHO_DEBUG_LOGS
             HAL_UART_SendLine("[WiFi] Failed after max retries.");
+#endif
             pushStatus();
             MCAL_WiFi_StartSetupPortal();
         }
@@ -178,13 +197,17 @@ WiFiHAL_State_t MCAL_WiFi_GetState(void) {
 
 /* ───────────────────────── Scan ─────────────────────────────────── */
 uint8_t MCAL_WiFi_Scan(char ssidList[][33], uint8_t maxCount) {
+#if STETHO_DEBUG_LOGS
     HAL_UART_SendLine("[WiFi] Scanning...");
+#endif
     int16_t found = HAL_WiFiRadio_Scan();
     if (found <= 0) return 0;
     uint8_t count = (found < maxCount) ? (uint8_t)found : maxCount;
     for (uint8_t i = 0; i < count; i++) {
         HAL_WiFiRadio_GetScannedSSID(i, ssidList[i], 33);
     }
+#if STETHO_DEBUG_LOGS
     HAL_UART_Printf("[WiFi] Found %d networks.\r\n", count);
+#endif
     return count;
 }

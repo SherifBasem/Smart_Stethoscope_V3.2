@@ -67,7 +67,7 @@ flowchart RL
 | --- | ----------- | ---- | ------------- |
 | REQ-01 | Mic task shall sample audio at 4 kHz (250 µs period). | Real-time | SYS timing log (TIMING) |
 | REQ-02 | Heart task shall sample MAX30102 at 100 Hz and compute BPM/SpO2. | Functional | SYS heart monitor checks |
-| REQ-03 | Battery ADC out-of-range shall be detected and clamped safely. | Fault tolerance | SYS fault injection (FAULT_ADC) |
+| REQ-03 | Battery ADC out-of-range shall be detected and clamped safely. | Fault tolerance | SYS boundary/fault validation |
 | REQ-04 | UI task shall poll buttons every 20 ms and wake on ISR semaphore. | RTOS | INT button+UI timing |
 | REQ-05 | WiFi shall retry connection up to 3 times within 15 s before failover. | Functional | INT WiFi state machine |
 | REQ-06 | Sensor queues shall overwrite with the latest reading without blocking. | RTOS | INT queue tests |
@@ -110,9 +110,9 @@ flowchart RL
 
 ## UART diagnostics 🧭
 
-### RTOS_STATS (what it does)
+### Production UART diagnostics
 
-The `RTOS_STATS` command calls FreeRTOS `vTaskGetRunTimeStats()` and prints a per-task CPU usage report since boot. This helps you see which tasks consume the most runtime under load (e.g., during `STRESS_ON`). It requires these FreeRTOS config flags to be enabled:
+Production firmware keeps the lightweight `STATUS`, `TIMING`, and `STACK` commands. Course/demo stress and runtime-stat commands are excluded from the firmware image.
 
 - `configGENERATE_RUN_TIME_STATS = 1`
 - `configUSE_STATS_FORMATTING_FUNCTIONS = 1`

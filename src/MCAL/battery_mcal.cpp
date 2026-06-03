@@ -6,6 +6,7 @@
 
 #include "battery_mcal.h"
 #include "battery_math.h"
+#include "../stetho_config.h"
 #include "../HAL/battery_hal.h"
 #include "../HAL/uart_hal.h"
 
@@ -16,15 +17,13 @@ static BatteryStatus_t s_status     = { 0.0f, 0, BATTERY_STATE_UNKNOWN, false, f
 static float           s_prevV      = 0.0f;
 static uint32_t        s_lastPollMs = 0;
 static bool            s_initialised = false;
-static int32_t         s_forcedRaw  = -1;
 
 /* ═══════════════════════════════════════════════════════════════════
    Helpers
    ═══════════════════════════════════════════════════════════════════ */
 
 static void doSample(void) {
-    uint16_t raw = (s_forcedRaw >= 0) ? (uint16_t)s_forcedRaw
-                                      : HAL_BatteryAdc_ReadRaw();
+    uint16_t raw = HAL_BatteryAdc_ReadRaw();
     float    v   = HAL_BatteryAdc_RawToVolts(raw);
 
     /* Clamp to sane range (open-circuit / disconnected protection) */
@@ -54,8 +53,9 @@ static void doSample(void) {
     s_status.isLow      = (pct <= BATTERY_LOW_THRESHOLD_PCT);
     s_status.isCritical = (pct <= BATTERY_CRITICAL_PCT);
 
-    HAL_UART_Printf("[Battery] %.2fV  %u%%  state=%d\r\n",
-                     v, pct, (int)state);
+#if STETHO_DEBUG_LOGS
+    HAL_UART_Printf("[Battery] %.2fV %u%% state=%d\r\n", v, pct, (int)state);
+#endif
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -83,7 +83,9 @@ void MCAL_Battery_Init(void) {
 
     s_lastPollMs  = (uint32_t)millis();
     s_initialised = true;
+#if STETHO_DEBUG_LOGS
     HAL_UART_SendLine("[Battery] MCAL init OK.");
+#endif
 }
 
 void MCAL_Battery_Tick(void) {
@@ -105,11 +107,3 @@ void MCAL_Battery_ForceRefresh(void) {
     s_lastPollMs = (uint32_t)millis();
 }
 
-void MCAL_Battery_SetForcedRaw(int32_t raw) {
-    if (raw < 0) {
-        s_forcedRaw = -1;
-        return;
-    }
-    if (raw > 4095) raw = 4095;
-    s_forcedRaw = raw;
-}

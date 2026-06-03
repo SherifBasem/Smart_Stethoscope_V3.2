@@ -31,6 +31,12 @@ typedef struct {
     char pass[64];
 } PortalCredentials_t;
 
+typedef struct {
+    const char* ssid;
+    const char* password;
+    const char* ip;
+} WifiConfig;
+
 /* ------ API ------ */
 bool MCAL_Portal_Start(void);
 void MCAL_Portal_Stop(void);
@@ -42,7 +48,7 @@ const char *MCAL_Portal_GetApSSID(void);
 const char *MCAL_Portal_GetApPassword(void);
 const char *MCAL_Portal_GetSetupURL(void);
 const char *MCAL_Portal_GetFallbackURL(void);
-void MCAL_Portal_GetWiFiQrText(char *out, size_t outLen);
+WifiConfig MCAL_Portal_GetWifiConfig(void);
 void MCAL_Portal_Tick(void);
 
 #endif /* CAPTIVE_PORTAL_MCAL_H */

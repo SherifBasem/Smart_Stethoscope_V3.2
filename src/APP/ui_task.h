@@ -15,7 +15,7 @@
  *               │       │      ├─► SCREEN_WIFI_STATUS
  *               │       │      ├─► SCREEN_WIFI_LOGIN
  *               │       │      ├─► SCREEN_WIFI_SCAN
- *               │       │      ├─► SCREEN_WIFI_SETUP → SCREEN_WIFI_SETUP_QR
+ *               │       │      ├─► SCREEN_WIFI_SETUP
  *               │       │      ├─► SCREEN_WIFI_RESET
  *               │       │      └─► SCREEN_WIFI_DISCONNECT
  *               │       ├─► SCREEN_BRIGHTNESS   (Low / Med / High)
@@ -94,7 +94,6 @@ typedef enum {
     UI_SCREEN_WIFI_RESET,
     UI_SCREEN_WIFI_DISCONNECT,
     UI_SCREEN_WIFI_SETUP,
-    UI_SCREEN_WIFI_SETUP_QR,
 } UIScreen_t;
 
 typedef struct {

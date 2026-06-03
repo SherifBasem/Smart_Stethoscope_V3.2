@@ -5,13 +5,10 @@
 
 #include "uart_task.h"
 #include "../MCAL/captive_portal_mcal.h"
-#include "../MCAL/battery_mcal.h"
 #include "mic_task.h"
 #include "heart_task.h"
 #include "ui_task.h"
 #include "wifi_task.h"
-#include "integration_test.h"
-#include "../HAL/i2c_hal.h"
 #include <esp_system.h>
 #include <esp_timer.h>
 
@@ -24,70 +21,6 @@ static int64_t s_lastLoopUs = 0;
 /* ═══════════════════════════════════════════════════════════════════
    Stress / demo helpers
    ═══════════════════════════════════════════════════════════════════ */
-static TaskHandle_t s_stressTask = NULL;
-static volatile uint32_t s_sharedCounter = 0;
-static portMUX_TYPE s_raceMux = portMUX_INITIALIZER_UNLOCKED;
-static volatile uint32_t s_prioInvWaitUs = 0;
-
-static void stressTask(void *pv) {
-    (void)pv;
-    volatile uint32_t x = 0;
-    for (;;) {
-        x = x * 1664525u + 1013904223u;
-    }
-}
-
-typedef struct {
-    bool useCritical;
-    uint32_t iterations;
-    TaskHandle_t notifyTask;
-} RaceArgs_t;
-
-static void raceWorker(void *pv) {
-    RaceArgs_t *args = (RaceArgs_t *)pv;
-    for (uint32_t i = 0; i < args->iterations; i++) {
-        if (args->useCritical) {
-            portENTER_CRITICAL(&s_raceMux);
-            s_sharedCounter++;
-            portEXIT_CRITICAL(&s_raceMux);
-        } else {
-            s_sharedCounter++;
-        }
-    }
-    if (args->notifyTask) xTaskNotifyGive(args->notifyTask);
-    vTaskDelete(NULL);
-}
-
-static void prioLowTask(void *pv) {
-    TaskHandle_t notify = (TaskHandle_t)pv;
-    if (g_i2cMutex) xSemaphoreTake(g_i2cMutex, portMAX_DELAY);
-    vTaskDelay(pdMS_TO_TICKS(500));
-    if (g_i2cMutex) xSemaphoreGive(g_i2cMutex);
-    if (notify) xTaskNotifyGive(notify);
-    vTaskDelete(NULL);
-}
-
-static void prioHighTask(void *pv) {
-    TaskHandle_t notify = (TaskHandle_t)pv;
-    int64_t t0 = esp_timer_get_time();
-    if (g_i2cMutex) xSemaphoreTake(g_i2cMutex, portMAX_DELAY);
-    int64_t t1 = esp_timer_get_time();
-    s_prioInvWaitUs = (uint32_t)(t1 - t0);
-    if (g_i2cMutex) xSemaphoreGive(g_i2cMutex);
-    if (notify) xTaskNotifyGive(notify);
-    vTaskDelete(NULL);
-}
-
-static void prioMidTask(void *pv) {
-    (void)pv;
-    int64_t endUs = esp_timer_get_time() + 600000;
-    volatile uint32_t x = 0;
-    while (esp_timer_get_time() < endUs) {
-        x = x * 22695477u + 1u;
-    }
-    vTaskDelete(NULL);
-}
-
 /* ═══════════════════════════════════════════════════════════════════
    Command parser
    ═══════════════════════════════════════════════════════════════════ */
@@ -112,14 +45,6 @@ static void processCommand(const char *raw, const UARTTask_Params_t *p)
         MCAL_UART_Respond("  HEART            - latest BPM / SpO2 / IR");
         MCAL_UART_Respond("  TIMING           - task WCET/period/jitter");
         MCAL_UART_Respond("  STACK            - stack high-water marks");
-        MCAL_UART_Respond("  FAULT_ADC <LOW|HIGH|OFF>");
-        MCAL_UART_Respond("  STRESS_ON / STRESS_OFF");
-        MCAL_UART_Respond("  RTOS_STATS       - runtime stats table");
-        MCAL_UART_Respond("  RACE_UNSAFE      - shared counter demo");
-        MCAL_UART_Respond("  RACE_SAFE        - shared counter w/ mutex");
-        MCAL_UART_Respond("  PRIO_INV         - priority inversion demo");
-        MCAL_UART_Respond("  INT <1-7>        - integration test step");
-        MCAL_UART_Respond("  INT_ALL          - run all integration steps");
         MCAL_UART_Respond("  REBOOT           - software reset");
         return;
     }
@@ -259,41 +184,9 @@ static void processCommand(const char *raw, const UARTTask_Params_t *p)
         return;
     }
 
-    /* ── INT <step> ── */
-    if (strcasecmp(token, "INT") == 0) {
-        char *arg = strtok(NULL, " ");
-        if (!arg) {
-            MCAL_UART_Respond("[INT] Usage: INT <1-7> or INT_ALL");
-            return;
-        }
-        IntegrationTest_Context_t ctx = {
-            p->heartQueue,
-            p->micLiveQueue,
-            p->wifiStatusQueue,
-            p->uiTaskHandle,
-            p->wifiTaskHandle,
-            p->heartTaskHandle,
-            p->micTaskHandle
-        };
-        uint8_t step = (uint8_t)atoi(arg);
-        IntegrationTest_RunStep(step, &ctx);
-        return;
-    }
+    
 
-    /* ── INT_ALL ── */
-    if (strcasecmp(token, "INT_ALL") == 0) {
-        IntegrationTest_Context_t ctx = {
-            p->heartQueue,
-            p->micLiveQueue,
-            p->wifiStatusQueue,
-            p->uiTaskHandle,
-            p->wifiTaskHandle,
-            p->heartTaskHandle,
-            p->micTaskHandle
-        };
-        IntegrationTest_RunAll(&ctx);
-        return;
-    }
+    
 
     /* ── STACK ── */
     if (strcasecmp(token, "STACK") == 0) {
@@ -309,88 +202,15 @@ static void processCommand(const char *raw, const UARTTask_Params_t *p)
         return;
     }
 
-    /* ── FAULT_ADC ── */
-    if (strcasecmp(token, "FAULT_ADC") == 0) {
-        char *mode = strtok(NULL, " ");
-        if (!mode) { MCAL_UART_Respond("[ERR] Usage: FAULT_ADC <LOW|HIGH|OFF>"); return; }
-        if (strcasecmp(mode, "LOW") == 0) {
-            MCAL_Battery_SetForcedRaw(0);
-            MCAL_UART_Respond("[OK] Battery ADC forced to 0.");
-        } else if (strcasecmp(mode, "HIGH") == 0) {
-            MCAL_Battery_SetForcedRaw(4095);
-            MCAL_UART_Respond("[OK] Battery ADC forced to 4095.");
-        } else if (strcasecmp(mode, "OFF") == 0) {
-            MCAL_Battery_SetForcedRaw(-1);
-            MCAL_UART_Respond("[OK] Battery ADC forcing disabled.");
-        } else {
-            MCAL_UART_Respond("[ERR] Unknown mode: %s", mode);
-        }
-        return;
-    }
+    
 
-    /* ── STRESS_ON / STRESS_OFF ── */
-    if (strcasecmp(token, "STRESS_ON") == 0) {
-        if (!s_stressTask) {
-            xTaskCreatePinnedToCore(stressTask, "Stress_Task", 2048, NULL, 1, &s_stressTask, 0);
-            MCAL_UART_Respond("[OK] Stress task started on Core 0.");
-        } else {
-            MCAL_UART_Respond("[OK] Stress task already running.");
-        }
-        return;
-    }
-    if (strcasecmp(token, "STRESS_OFF") == 0) {
-        if (s_stressTask) {
-            vTaskDelete(s_stressTask);
-            s_stressTask = NULL;
-            MCAL_UART_Respond("[OK] Stress task stopped.");
-        } else {
-            MCAL_UART_Respond("[OK] Stress task not running.");
-        }
-        return;
-    }
+    
 
-    /* ── RTOS_STATS ── */
-    if (strcasecmp(token, "RTOS_STATS") == 0) {
-#if (configGENERATE_RUN_TIME_STATS == 1) && (configUSE_STATS_FORMATTING_FUNCTIONS == 1)
-        char buf[512];
-        vTaskGetRunTimeStats(buf);
-        MCAL_UART_Respond("Task            Time      %%\n%s", buf);
-#else
-        MCAL_UART_Respond("[ERR] Runtime stats not enabled in FreeRTOSConfig.h");
-#endif
-        return;
-    }
+    
 
-    /* ── RACE_UNSAFE / RACE_SAFE ── */
-    if (strcasecmp(token, "RACE_UNSAFE") == 0 || strcasecmp(token, "RACE_SAFE") == 0) {
-        bool safe = (strcasecmp(token, "RACE_SAFE") == 0);
-        s_sharedCounter = 0;
-        RaceArgs_t args[2];
-        TaskHandle_t self = xTaskGetCurrentTaskHandle();
-        args[0] = {safe, 10000, self};
-        args[1] = {safe, 10000, self};
-        xTaskCreatePinnedToCore(raceWorker, "RaceA", 2048, &args[0], 2, NULL, 0);
-        xTaskCreatePinnedToCore(raceWorker, "RaceB", 2048, &args[1], 2, NULL, 0);
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000));
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000));
-        MCAL_UART_Respond("[Race] %s final=%lu (expected 20000)",
-                          safe ? "SAFE" : "UNSAFE", (unsigned long)s_sharedCounter);
-        return;
-    }
+    
 
-    /* ── PRIO_INV ── */
-    if (strcasecmp(token, "PRIO_INV") == 0) {
-        s_prioInvWaitUs = 0;
-        TaskHandle_t self = xTaskGetCurrentTaskHandle();
-        xTaskCreatePinnedToCore(prioLowTask, "PrioLow", 2048, self, 1, NULL, 0);
-        xTaskCreatePinnedToCore(prioMidTask, "PrioMid", 2048, NULL, 2, NULL, 0);
-        xTaskCreatePinnedToCore(prioHighTask, "PrioHigh", 2048, self, 3, NULL, 0);
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000));
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000));
-        MCAL_UART_Respond("[PrioInv] Heart blocked %lu us on I2C mutex.",
-                          (unsigned long)s_prioInvWaitUs);
-        return;
-    }
+    
 
     /* ── REBOOT ── */
     if (strcasecmp(token, "REBOOT") == 0) {

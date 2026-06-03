@@ -5,13 +5,13 @@
  */
 
 #include "captive_portal_mcal.h"
+#include "../stetho_config.h"
 #include "../HAL/nvs_hal.h"
 #include "../HAL/uart_hal.h"
 #include "../HAL/wifi_hal.h"
 #include <ESPmDNS.h>
 #include <WebServer.h>
 #include <DNSServer.h>
-#include <esp_system.h>
 #include <string.h>
 
 static DNSServer s_dns;
@@ -20,7 +20,7 @@ static PortalState_t s_state = PORTAL_STATE_IDLE;
 static PortalCredentials_t s_credentials;
 static bool s_serverConfigured = false;
 static bool s_credentialsPending = false;
-static char s_apPassword[16] = "";
+static const char s_apPassword[] = "STH-1A2B3C";
 
 static const char HTML_PAGE[] PROGMEM =
 "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -46,18 +46,17 @@ static void redirectToPortal(void) {
     s_server.send(302, "text/plain", "");
 }
 
-static void generateApPassword(void) {
-    uint32_t r = esp_random();
-    snprintf(s_apPassword, sizeof(s_apPassword), "STH-%08lX", (unsigned long)r);
-}
-
 static void startMdns(void) {
     MDNS.end();
     if (MDNS.begin(PORTAL_MDNS_HOST)) {
         MDNS.addService("http", "tcp", 80);
+#if STETHO_DEBUG_LOGS
         HAL_UART_SendLine("[Portal] mDNS ready at http://myesp.local/");
+#endif
     } else {
+#if STETHO_DEBUG_LOGS
         HAL_UART_SendLine("[Portal] mDNS start failed; use fallback IP.");
+#endif
     }
 }
 
@@ -84,7 +83,9 @@ static void handleSave(void) {
                   "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
                   "<title>Saved</title></head><body><h2>Saved</h2>"
                   "<p>The stethoscope is connecting. You can close this page.</p></body></html>");
+#if STETHO_DEBUG_LOGS
     HAL_UART_Printf("[Portal] Credentials saved for \"%s\".\r\n", s_credentials.ssid);
+#endif
 }
 
 static void configureServer(void) {
@@ -108,8 +109,6 @@ bool MCAL_Portal_Start(void) {
 
     memset(&s_credentials, 0, sizeof(s_credentials));
     s_credentialsPending = false;
-    generateApPassword();
-
     IPAddress apIp(192, 168, 4, 1);
     IPAddress gateway(192, 168, 4, 1);
     IPAddress subnet(255, 255, 255, 0);
@@ -135,8 +134,10 @@ bool MCAL_Portal_Start(void) {
     startMdns();
     s_state = PORTAL_STATE_RUNNING;
 
+#if STETHO_DEBUG_LOGS
     HAL_UART_Printf("[Portal] AP \"%s\" started at %s. Password: %s\r\n",
                      PORTAL_AP_SSID, PORTAL_AP_IP, s_apPassword);
+#endif
     return true;
 }
 
@@ -146,7 +147,9 @@ void MCAL_Portal_Stop(void) {
     MDNS.end();
     HAL_WiFiRadio_StopSoftAP();
     if (s_state != PORTAL_STATE_IDLE) s_state = PORTAL_STATE_STOPPED;
+#if STETHO_DEBUG_LOGS
     HAL_UART_SendLine("[Portal] Stopped.");
+#endif
 }
 
 PortalState_t MCAL_Portal_GetState(void) {
@@ -189,10 +192,13 @@ const char *MCAL_Portal_GetFallbackURL(void) {
     return PORTAL_FALLBACK_URL;
 }
 
-void MCAL_Portal_GetWiFiQrText(char *out, size_t outLen) {
-    if (!out || outLen == 0) return;
-    snprintf(out, outLen, "WIFI:T:WPA;S:%s;P:%s;;", PORTAL_AP_SSID, s_apPassword);
-    out[outLen - 1] = '\0';
+WifiConfig MCAL_Portal_GetWifiConfig(void) {
+    WifiConfig config = {
+        PORTAL_AP_SSID,
+        s_apPassword,
+        PORTAL_AP_IP
+    };
+    return config;
 }
 
 void MCAL_Portal_Tick(void) {

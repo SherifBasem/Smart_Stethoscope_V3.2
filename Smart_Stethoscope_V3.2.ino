@@ -1,4 +1,5 @@
 /* ── Application layer ── */
+#include "src/stetho_config.h"
 #include "src/APP/ui_task.h"
 #include "src/APP/wifi_task.h"
 #include "src/APP/uart_task.h"
@@ -56,11 +57,15 @@ void setup() {
     /* ── 1. UART debug ── */
     HAL_UART_Init();
     delay(200);
+#if STETHO_DEBUG_LOGS
     HAL_UART_SendLine("\r\n[BOOT] Smart Stethoscope v0.4 starting...");
+#endif
 
     /* ── 2. I2C bus ── */
     HAL_I2C_Init();
+#if STETHO_DEBUG_LOGS
     HAL_UART_SendLine("[BOOT] I2C bus up (SDA=GPIO8, SCL=GPIO9, 400kHz).");
+#endif
 
     /* ── 3. OLED ── */
     if (!MCAL_OLED_Init()) {
@@ -105,9 +110,13 @@ void setup() {
     uartParams.heartQueue      = NULL;
 
     /* ── 7. WiFi task early (maximize heap before other tasks) ── */
+#if STETHO_DEBUG_LOGS
     HAL_UART_Printf("[BOOT] Free heap before WiFi task: %u\r\n", ESP.getFreeHeap());
+#endif
     g_wifiTaskHandle = WiFiTask_Start(&wifiParams);
+#if STETHO_DEBUG_LOGS
     HAL_UART_Printf("[BOOT] Free heap after WiFi task: %u\r\n", ESP.getFreeHeap());
+#endif
 
     /* ── 8. Heart task ── */
     g_heartTaskHandle = HeartTask_Start(&heartParams);
@@ -131,8 +140,10 @@ void setup() {
 
     g_uartTaskHandle = UARTTask_Start(&uartParams);
 
+#if STETHO_DEBUG_LOGS
     HAL_UART_SendLine("[BOOT] All tasks created. FreeRTOS scheduler running.");
     HAL_UART_SendLine("[BOOT] Type HELP in serial monitor for commands.");
+#endif
 }
 
 void loop() {
