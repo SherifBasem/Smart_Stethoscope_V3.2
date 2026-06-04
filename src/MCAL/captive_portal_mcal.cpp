@@ -12,6 +12,7 @@
 #include <ESPmDNS.h>
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <esp_system.h>
 #include <string.h>
 
 static DNSServer s_dns;
@@ -20,7 +21,7 @@ static PortalState_t s_state = PORTAL_STATE_IDLE;
 static PortalCredentials_t s_credentials;
 static bool s_serverConfigured = false;
 static bool s_credentialsPending = false;
-static const char s_apPassword[] = "STH-1A2B3C";
+static char s_apPassword[16] = "";
 
 static const char HTML_PAGE[] PROGMEM =
 "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -44,6 +45,11 @@ static void sendPortalPage(void) {
 static void redirectToPortal(void) {
     s_server.sendHeader("Location", PORTAL_SETUP_URL, true);
     s_server.send(302, "text/plain", "");
+}
+
+static void generateApPassword(void) {
+    uint32_t r = esp_random();
+    snprintf(s_apPassword, sizeof(s_apPassword), "STH-%08lX", (unsigned long)r);
 }
 
 static void startMdns(void) {
@@ -109,6 +115,7 @@ bool MCAL_Portal_Start(void) {
 
     memset(&s_credentials, 0, sizeof(s_credentials));
     s_credentialsPending = false;
+    generateApPassword();
     IPAddress apIp(192, 168, 4, 1);
     IPAddress gateway(192, 168, 4, 1);
     IPAddress subnet(255, 255, 255, 0);
@@ -192,13 +199,10 @@ const char *MCAL_Portal_GetFallbackURL(void) {
     return PORTAL_FALLBACK_URL;
 }
 
-WifiConfig MCAL_Portal_GetWifiConfig(void) {
-    WifiConfig config = {
-        PORTAL_AP_SSID,
-        s_apPassword,
-        PORTAL_AP_IP
-    };
-    return config;
+void MCAL_Portal_GetWiFiQrText(char *out, size_t outLen) {
+    if (!out || outLen == 0) return;
+    snprintf(out, outLen, "WIFI:T:WPA;S:%s;P:%s;;", PORTAL_AP_SSID, s_apPassword);
+    out[outLen - 1] = '\0';
 }
 
 void MCAL_Portal_Tick(void) {

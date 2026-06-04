@@ -40,7 +40,6 @@
 #define MIC_ADC_MAX          4095       /**< 2^12 - 1                          */
 #define MIC_ADC_VREF         3.3f       /**< ADC reference voltage             */
 #define MIC_ADC_MID          2048       /**< DC bias mid-point (AC coupling)   */
-#define MIC_ADC_CHANNEL      ADC1_CHANNEL_2   /**< GPIO3 = ADC1_CH2 on S3     */
 #define MIC_SAMPLE_RATE_HZ   4000       /**< 4 kHz — covers 20–800 Hz band    */
 #define MIC_SAMPLE_INTERVAL_US  (1000000 / MIC_SAMPLE_RATE_HZ)  /* 250 µs     */
 

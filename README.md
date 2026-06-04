@@ -1,5 +1,12 @@
 # Smart Stethoscope — Main Entry Point
 
+## SUPER IMPORTANT STEP
+
+Do these steps before run the arduino code
+
+- Go to Tools --> Erase All Flash Before Sketch Upload: -> Enable
+- Partition Scheme: "Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS)"
+
 ## System Architecture
 
 ```mermaid

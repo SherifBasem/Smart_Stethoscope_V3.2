@@ -35,7 +35,6 @@
 #define BATTERY_ADC_VREF        3.3f                /**< ADC reference voltage (V)         */
 #define BATTERY_DIVIDER_RATIO   2.0f                /**< Vin = Vadc × ratio                */
 #define BATTERY_ADC_SAMPLES     16                  /**< Oversample count for noise reject */
-#define BATTERY_ADC_CHANNEL     ADC1_CHANNEL_3      /**< GPIO4 = ADC1_CH3 on S3            */
 
 /* ------ API ------ */
 /**

@@ -17,13 +17,15 @@ static BatteryStatus_t s_status     = { 0.0f, 0, BATTERY_STATE_UNKNOWN, false, f
 static float           s_prevV      = 0.0f;
 static uint32_t        s_lastPollMs = 0;
 static bool            s_initialised = false;
+static int32_t         s_forcedRaw  = -1;
 
 /* ═══════════════════════════════════════════════════════════════════
    Helpers
    ═══════════════════════════════════════════════════════════════════ */
 
 static void doSample(void) {
-    uint16_t raw = HAL_BatteryAdc_ReadRaw();
+    uint16_t raw = (s_forcedRaw >= 0) ? (uint16_t)s_forcedRaw
+                                      : HAL_BatteryAdc_ReadRaw();
     float    v   = HAL_BatteryAdc_RawToVolts(raw);
 
     /* Clamp to sane range (open-circuit / disconnected protection) */
@@ -107,3 +109,11 @@ void MCAL_Battery_ForceRefresh(void) {
     s_lastPollMs = (uint32_t)millis();
 }
 
+void MCAL_Battery_SetForcedRaw(int32_t raw) {
+    if (raw < 0) {
+        s_forcedRaw = -1;
+        return;
+    }
+    if (raw > 4095) raw = 4095;
+    s_forcedRaw = raw;
+}

@@ -6,7 +6,6 @@
 
 #include "heart_task.h"
 #include "../HAL/uart_hal.h"
-#include <stdatomic.h>
 #include <esp_timer.h>
 
 /* ═══════════════════════════════════════════════════════════════════

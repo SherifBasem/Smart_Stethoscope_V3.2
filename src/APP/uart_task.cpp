@@ -184,10 +184,6 @@ static void processCommand(const char *raw, const UARTTask_Params_t *p)
         return;
     }
 
-    
-
-    
-
     /* ── STACK ── */
     if (strcasecmp(token, "STACK") == 0) {
         MCAL_UART_Respond("[Stack] UART  : %u words", (unsigned)uxTaskGetStackHighWaterMark(NULL));
@@ -201,16 +197,6 @@ static void processCommand(const char *raw, const UARTTask_Params_t *p)
             MCAL_UART_Respond("[Stack] Mic   : %u words", (unsigned)uxTaskGetStackHighWaterMark(p->micTaskHandle));
         return;
     }
-
-    
-
-    
-
-    
-
-    
-
-    
 
     /* ── REBOOT ── */
     if (strcasecmp(token, "REBOOT") == 0) {

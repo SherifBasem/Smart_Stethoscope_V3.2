@@ -80,4 +80,10 @@ bool MCAL_Battery_GetStatus(BatteryStatus_t *out);
  */
 void MCAL_Battery_ForceRefresh(void);
 
+/**
+ * @brief  Force a raw ADC value for fault injection.
+ * @param  raw  Raw ADC value (0..4095), or -1 to disable forcing.
+ */
+void MCAL_Battery_SetForcedRaw(int32_t raw);
+
 #endif /* BATTERY_MCAL_H */
