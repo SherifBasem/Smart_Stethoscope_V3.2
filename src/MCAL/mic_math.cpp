@@ -25,3 +25,26 @@ uint8_t MCAL_Mic_DbToPercent(float db) {
     if (pct > 100.0f) pct = 100.0f;
     return (uint8_t)pct;
 }
+
+uint8_t MCAL_Mic_CapacitySeconds(uint32_t samples, uint32_t sampleRate,
+                                 uint8_t minSec, uint8_t maxSec) {
+    if (sampleRate == 0 || minSec == 0 || maxSec < minSec) return 0;
+    uint32_t sec = samples / sampleRate;
+    if (sec < minSec) return 0;
+    if (sec > maxSec) sec = maxSec;
+    return (uint8_t)sec;
+}
+
+bool MCAL_Mic_AnalogSelfCheck(uint16_t minRaw, uint16_t maxRaw, uint32_t avgRaw) {
+    const uint16_t railMargin = 32;
+    const uint16_t minBias = 900;
+    const uint16_t maxBias = 3200;
+    const uint16_t minSpread = 2;
+
+    if (minRaw <= railMargin) return false;
+    if (maxRaw >= (4095 - railMargin)) return false;
+    if (avgRaw < minBias || avgRaw > maxBias) return false;
+    if (maxRaw < minRaw) return false;
+    if ((uint16_t)(maxRaw - minRaw) < minSpread) return false;
+    return true;
+}

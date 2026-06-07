@@ -20,6 +20,18 @@ extern "C" {
  */
 uint8_t MCAL_Battery_VoltToPct(float v);
 
+/**
+ * @brief Return true when a raw ADC/voltage pair is plausible for a
+ *        connected single-cell LiPo through the configured divider.
+ */
+bool MCAL_Battery_IsSamplePlausible(uint16_t raw, float v);
+
+/**
+ * @brief Return true when repeated ADC samples are close enough to treat
+ *        the divider as stable instead of floating/disconnected.
+ */
+bool MCAL_Battery_IsSampleStable(uint16_t minRaw, uint16_t maxRaw);
+
 #ifdef __cplusplus
 }
 #endif

@@ -167,6 +167,7 @@ static uint32_t    s_lastSystemInfoPostMs = 0;
 static BatteryStatus_t s_battery;
 static uint8_t         s_lastBattPct   = 255;
 static BatteryState_t  s_lastBattState = BATTERY_STATE_UNKNOWN;
+static bool            s_lastBattConnected = false;
 
 /* ══════════════════════════════════════════════════════════════════
     Timing stats
@@ -216,6 +217,12 @@ static void drawBatteryIcon(void) {
     display.fillRect(ICON_X, ICON_Y, SHELL_W + NUB_W + 1, SHELL_H, SSD1306_BLACK);
     display.drawRect(ICON_X, ICON_Y, SHELL_W, SHELL_H, SSD1306_WHITE);
     display.fillRect(ICON_X + SHELL_W, NUB_Y, NUB_W, NUB_H, SSD1306_WHITE);
+
+    if (!s_battery.isConnected) {
+        display.drawLine(ICON_X + 2, ICON_Y + 1, ICON_X + SHELL_W - 2, ICON_Y + SHELL_H - 2, SSD1306_WHITE);
+        display.drawLine(ICON_X + 2, ICON_Y + SHELL_H - 2, ICON_X + SHELL_W - 2, ICON_Y + 1, SSD1306_WHITE);
+        return;
+    }
 
     uint8_t pct = s_battery.percent;
     if (pct > 100) pct = 100;
@@ -291,6 +298,10 @@ static void renderMenu(const char *title,
         snprintf(line, sizeof(line),
                  (idx == sel) ? ">%-20s" : " %-20s",
                  items[idx]);
+        if (v == MENU_VISIBLE - 1 && (scroll + MENU_VISIBLE) < count) {
+            line[20] = 'v';
+            line[21] = '\0';
+        }
         MCAL_OLED_PrintLine(2 + v, line);
     }
     pushDisplay();
@@ -416,8 +427,8 @@ static void renderLungSound(QueueHandle_t micQ) {
         MCAL_OLED_Clear();
         oledTitle(" Lung Sound ");
         oledDivider();
-        MCAL_OLED_PrintLine(2, " Mic unavailable");
-        MCAL_OLED_PrintLine(3, " Check MAX4466");
+        MCAL_OLED_PrintLine(2, MCAL_Mic_IsHardwarePresent() ? " Memory too low" : " Mic unavailable");
+        MCAL_OLED_PrintLine(3, MCAL_Mic_IsHardwarePresent() ? " Need 30s buffer" : " Check MAX4466");
         MCAL_OLED_PrintLine(4, " See UART logs");
         MCAL_OLED_PrintLine(5, "[BACK] Return");
         pushDisplay();
@@ -462,7 +473,8 @@ static void renderLungSound(QueueHandle_t micQ) {
 
         case MIC_STATE_IDLE:
             snprintf(header,     sizeof(header),     " Lung Sound      ");
-            snprintf(statusLine, sizeof(statusLine), "[SEL]Rec [BCK]Back");
+            snprintf(statusLine, sizeof(statusLine), "%us [SEL]Rec [BCK]",
+                     MCAL_Mic_GetRecordCapacitySec());
             break;
 
         case MIC_STATE_RECORDING: {
@@ -531,16 +543,15 @@ static void renderLungSound(QueueHandle_t micQ) {
         display.print(dbLabel);
     }
 
-    /* Row 5: status / hint */
-    /* Convert pixel row 48 to oled row 6 (48/8 = 6) */
-    MCAL_OLED_PrintLine(6, statusLine);
+    /* Bottom row: status / hint */
+    MCAL_OLED_PrintLine(7, statusLine);
 
     /* For UPLOAD_OK also draw confidence bar on row 5 */
     if (micState == MIC_STATE_UPLOAD_OK) {
         MicMLResult_t res = {"", 0.0f, false};
         MCAL_Mic_GetMLResult(&res);
         uint8_t confPct = (uint8_t)(res.confidence * 100.0f);
-        /* Small confidence bar on row 5 (pixel y=40) */
+        /* Small confidence bar above the bottom prompt. */
         display.drawRect(0, 48, 80, 6, SSD1306_WHITE);
         int confFill = (int)(78 * (uint32_t)confPct / 100);
         if (confFill > 0) display.fillRect(1, 49, confFill, 4, SSD1306_WHITE);
@@ -761,7 +772,8 @@ static void renderSystemInfo(void) {
     uint32_t      uptimeSec = (uint32_t)(millis() / 1000);
 
     bool battChanged = (s_battery.percent != s_lastBattPct ||
-                        s_battery.state   != s_lastBattState);
+                        s_battery.state   != s_lastBattState ||
+                        s_battery.isConnected != s_lastBattConnected);
 
     if (heap == s_lastHeap && uptimeSec == s_lastUptimeSec && !battChanged) return;
 
@@ -777,8 +789,12 @@ static void renderSystemInfo(void) {
     snprintf(line, sizeof(line), " Up: %lus C%d",
              (unsigned long)uptimeSec, xPortGetCoreID());
     MCAL_OLED_PrintLine(3, line);
-    snprintf(line, sizeof(line), " Bat: %.2fV %u%%",
-             s_battery.voltageV, s_battery.percent);
+    if (s_battery.isConnected) {
+        snprintf(line, sizeof(line), " Bat: %.2fV %u%%",
+                 s_battery.voltageV, s_battery.percent);
+    } else {
+        snprintf(line, sizeof(line), " Bat: N/C");
+    }
     MCAL_OLED_PrintLine(4, line);
     MCAL_OLED_PrintLine(5, "[SEL]Battery [BCK]Back");
 
@@ -787,17 +803,23 @@ static void renderSystemInfo(void) {
 
 static void renderBatteryInfo(void) {
     bool changed = (s_battery.percent != s_lastBattPct ||
-                    s_battery.state   != s_lastBattState);
+                    s_battery.state   != s_lastBattState ||
+                    s_battery.isConnected != s_lastBattConnected);
     if (!changed) return;
 
     s_lastBattPct   = s_battery.percent;
     s_lastBattState = s_battery.state;
+    s_lastBattConnected = s_battery.isConnected;
 
     MCAL_OLED_Clear();
     oledHeader("   Battery     ");
 
     char line[22];
-    snprintf(line, sizeof(line), " Volt: %.3f V", s_battery.voltageV);
+    if (s_battery.isConnected) {
+        snprintf(line, sizeof(line), " Volt: %.3f V", s_battery.voltageV);
+    } else {
+        snprintf(line, sizeof(line), " Volt: ---");
+    }
     MCAL_OLED_PrintLine(2, line);
 
     const char *stateLabel;
@@ -807,11 +829,17 @@ static void renderBatteryInfo(void) {
         case BATTERY_STATE_DISCHARGING: stateLabel = "DIS";  break;
         default:                        stateLabel = "???";  break;
     }
-    snprintf(line, sizeof(line), " %u%%  [%s]", s_battery.percent, stateLabel);
+    if (s_battery.isConnected) {
+        snprintf(line, sizeof(line), " %u%%  [%s]", s_battery.percent, stateLabel);
+    } else {
+        snprintf(line, sizeof(line), " ---  [N/C]");
+    }
     MCAL_OLED_PrintLine(3, line);
 
     const uint8_t BAR_CHARS = 18;
-    uint8_t filled = (uint8_t)((s_battery.percent * BAR_CHARS) / 100);
+    uint8_t filled = s_battery.isConnected
+        ? (uint8_t)((s_battery.percent * BAR_CHARS) / 100)
+        : 0;
     char bar[22];
     bar[0] = ' ';
     for (uint8_t i = 0; i < BAR_CHARS; i++) {
@@ -820,7 +848,9 @@ static void renderBatteryInfo(void) {
     bar[1 + BAR_CHARS] = '\0';
     MCAL_OLED_PrintLine(4, bar);
 
-    if (s_battery.isCritical) {
+    if (!s_battery.isConnected) {
+        MCAL_OLED_PrintLine(5, " Battery not conn");
+    } else if (s_battery.isCritical) {
         MCAL_OLED_PrintLine(5, "!! CRITICAL LOW !!");
     } else if (s_battery.isLow) {
         MCAL_OLED_PrintLine(5, "! Low battery");
@@ -842,9 +872,13 @@ static void sendSystemInfoIfNeeded(void) {
     char payload[192];
     snprintf(payload, sizeof(payload),
              "{\"free_heap_kb\":%lu,\"uptime_s\":%lu,\"core\":%d,"
-             "\"battery_v\":%.3f,\"battery_pct\":%u,\"battery_state\":%d}",
+             "\"battery_connected\":%s,\"battery_v\":%.3f,"
+             "\"battery_pct\":%u,\"battery_state\":%d,\"battery_raw\":%u}",
              heap / 1024, (unsigned long)uptimeSec, xPortGetCoreID(),
-             s_battery.voltageV, s_battery.percent, (int)s_battery.state);
+             s_battery.isConnected ? "true" : "false",
+             s_battery.isConnected ? s_battery.voltageV : 0.0f,
+             s_battery.isConnected ? s_battery.percent : 0,
+             (int)s_battery.state, s_battery.rawAdc);
 
     HTTPClient http;
     http.begin(SYSTEM_INFO_API_URL);
@@ -1158,6 +1192,7 @@ static void goTo(UIScreen_t target) {
         s_lastUptimeSec = 0;
         s_lastBattPct   = 255;
         s_lastBattState = BATTERY_STATE_UNKNOWN;
+        s_lastBattConnected = false;
     }
 
     HAL_UART_Printf("[UI] -> screen %d\r\n", (int)target);
@@ -1239,8 +1274,7 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
             if (evt == BTN_EVENT_SELECT_PRESSED) {
                 switch (ms) {
                     case MIC_STATE_IDLE:
-                        /* Start a 60-second recording */
-                        MCAL_Mic_StartRecording(60);
+                        MCAL_Mic_StartRecording(MCAL_Mic_GetRecordCapacitySec());
                         s_lungDirty = true;
                         break;
 
@@ -1469,6 +1503,7 @@ static void doSleep(TickType_t *lastWake) {
     s_lastHeap       = 0;
     s_lastUptimeSec  = 0;
     s_lastBattPct    = 255;
+    s_lastBattConnected = false;
     applyBrightness();
 
     MCAL_Battery_ForceRefresh();
@@ -1593,7 +1628,8 @@ void UITask(void *pvParams) {
 
             case UI_SCREEN_MAIN_MENU:
                 if (screenChanged || hadInput ||
-                    s_battery.percent != s_lastBattPct) renderMainMenu();
+                    s_battery.percent != s_lastBattPct ||
+                    s_battery.isConnected != s_lastBattConnected) renderMainMenu();
                 break;
 
             case UI_SCREEN_HEART_MONITOR:
@@ -1620,7 +1656,8 @@ void UITask(void *pvParams) {
 
             case UI_SCREEN_SETTINGS:
                 if (screenChanged || hadInput ||
-                    s_battery.percent != s_lastBattPct) renderSettings();
+                    s_battery.percent != s_lastBattPct ||
+                    s_battery.isConnected != s_lastBattConnected) renderSettings();
                 break;
 
             case UI_SCREEN_BRIGHTNESS:
@@ -1673,6 +1710,7 @@ void UITask(void *pvParams) {
         /* Update anti-blink sentinels after render */
         s_lastBattPct   = s_battery.percent;
         s_lastBattState = s_battery.state;
+        s_lastBattConnected = s_battery.isConnected;
 
         int64_t t1 = esp_timer_get_time();
         uint32_t delta = (uint32_t)(t1 - t0);

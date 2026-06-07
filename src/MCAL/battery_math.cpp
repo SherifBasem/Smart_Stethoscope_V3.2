@@ -6,6 +6,12 @@
 
 #include "battery_math.h"
 
+#define BATTERY_RAW_RAIL_MARGIN       32
+#define BATTERY_RAW_MAX               4095
+#define BATTERY_MIN_CONNECTED_V       3.00f
+#define BATTERY_MAX_CONNECTED_V       4.35f
+#define BATTERY_MAX_SAMPLE_SPREAD     96
+
 /* LiPo voltage → percentage lookup table (empirical). */
 typedef struct { float v; uint8_t pct; } VoltPct_t;
 
@@ -34,4 +40,17 @@ uint8_t MCAL_Battery_VoltToPct(float v) {
         }
     }
     return 0;
+}
+
+bool MCAL_Battery_IsSamplePlausible(uint16_t raw, float v) {
+    if (raw <= BATTERY_RAW_RAIL_MARGIN) return false;
+    if (raw >= (BATTERY_RAW_MAX - BATTERY_RAW_RAIL_MARGIN)) return false;
+    if (v < BATTERY_MIN_CONNECTED_V) return false;
+    if (v > BATTERY_MAX_CONNECTED_V) return false;
+    return true;
+}
+
+bool MCAL_Battery_IsSampleStable(uint16_t minRaw, uint16_t maxRaw) {
+    if (maxRaw < minRaw) return false;
+    return ((uint16_t)(maxRaw - minRaw) <= BATTERY_MAX_SAMPLE_SPREAD);
 }

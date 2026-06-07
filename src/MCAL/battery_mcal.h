@@ -53,6 +53,8 @@ typedef struct {
     BatteryState_t state;         /**< Charging / discharging / full       */
     bool           isLow;         /**< true when percent ≤ LOW_THRESHOLD   */
     bool           isCritical;    /**< true when percent ≤ CRITICAL        */
+    bool           isConnected;   /**< true when ADC path looks valid      */
+    uint16_t       rawAdc;        /**< Latest averaged raw ADC sample      */
 } BatteryStatus_t;
 
 /* ------ API ------ */

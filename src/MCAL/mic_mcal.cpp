@@ -26,6 +26,8 @@
    ═══════════════════════════════════════════════════════════════════ */
 static int16_t  *s_pcmBuf       = nullptr;
 static uint32_t  s_pcmCapacity  = 0;   /* actual allocated samples */
+static bool      s_micHardwarePresent = false;
+static uint8_t   s_recordCapacitySec = 0;
 
 /* ═══════════════════════════════════════════════════════════════════
    Live window circular buffer (ring buffer, MIC_LIVE_WINDOW_SAMPLES)
@@ -60,6 +62,27 @@ static int16_t  s_windowPeak   = 0;    /* peak absolute amplitude */
    ML result
    ═══════════════════════════════════════════════════════════════════ */
 static MicMLResult_t s_mlResult = {"", 0.0f, false};
+
+static bool runMicSelfCheck(void) {
+    const uint8_t sampleCount = 32;
+    uint16_t minRaw = 4095;
+    uint16_t maxRaw = 0;
+    uint32_t sum = 0;
+
+    for (uint8_t i = 0; i < sampleCount; i++) {
+        uint16_t raw = HAL_MicAdc_ReadRaw();
+        sum += raw;
+        if (raw < minRaw) minRaw = raw;
+        if (raw > maxRaw) maxRaw = raw;
+        delayMicroseconds(250);
+    }
+
+    uint32_t avgRaw = sum / sampleCount;
+    bool ok = MCAL_Mic_AnalogSelfCheck(minRaw, maxRaw, avgRaw);
+    HAL_UART_Printf("[Mic] MAX4466 self-check raw min=%u max=%u avg=%lu -> %s\r\n",
+                    minRaw, maxRaw, (unsigned long)avgRaw, ok ? "OK" : "FAIL");
+    return ok;
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    Base64 encoder (RFC 4648, no line wrapping)
@@ -97,6 +120,10 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue) {
     s_liveQueue = liveQueue;
 
     HAL_MicAdc_Init();
+    s_micHardwarePresent = runMicSelfCheck();
+    if (!s_micHardwarePresent) {
+        HAL_UART_SendLine("[Mic] WARNING: MAX4466 analog path not detected.");
+    }
 
     /* Try PSRAM first for the large recording buffer */
     if (psramFound()) {
@@ -113,11 +140,11 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue) {
         const uint32_t reserve = 80 * 1024; /* keep headroom for WiFi/RTOS */
         uint32_t maxBytes = (freeHeap > reserve) ? (freeHeap - reserve) : 0;
         uint32_t maxSamples = maxBytes / sizeof(int16_t);
-        uint32_t targetSamples = MIC_SAMPLE_RATE_HZ * 10; /* 10 s target */
+        uint32_t targetSamples = MIC_MAX_RECORD_SAMPLES;
         uint32_t fallbackSamples = (maxSamples < targetSamples) ? maxSamples : targetSamples;
 
-        if (fallbackSamples < (MIC_SAMPLE_RATE_HZ * 5)) {
-            HAL_UART_Printf("[Mic] FATAL: insufficient heap for PCM buffer (free=%lu).\r\n",
+        if (fallbackSamples < (MIC_SAMPLE_RATE_HZ * MIC_MIN_RECORD_SEC)) {
+            HAL_UART_Printf("[Mic] FATAL: insufficient heap for minimum PCM buffer (free=%lu).\r\n",
                              (unsigned long)freeHeap);
             return false;
         }
@@ -138,13 +165,32 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue) {
     s_liveFill = 0;
     s_state    = MIC_STATE_IDLE;
     s_active   = false;
+    s_recordCapacitySec = MCAL_Mic_CapacitySeconds(
+        s_pcmCapacity, MIC_SAMPLE_RATE_HZ, MIC_MIN_RECORD_SEC, MIC_MAX_RECORD_SEC);
+
+    if (s_recordCapacitySec == 0) {
+        HAL_UART_SendLine("[Mic] FATAL: recording capacity below 30 seconds.");
+        return false;
+    }
+
+    if (!s_micHardwarePresent) {
+        return false;
+    }
 
     HAL_UART_SendLine("[Mic] MCAL init OK (sensor idle).");
     return true;
 }
 
 bool MCAL_Mic_IsReady(void) {
-    return (s_pcmBuf != nullptr);
+    return (s_pcmBuf != nullptr && s_micHardwarePresent && s_recordCapacitySec >= MIC_MIN_RECORD_SEC);
+}
+
+bool MCAL_Mic_IsHardwarePresent(void) {
+    return s_micHardwarePresent;
+}
+
+uint8_t MCAL_Mic_GetRecordCapacitySec(void) {
+    return s_recordCapacitySec;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -174,9 +220,11 @@ bool MCAL_Mic_IsActive(void) {
    ═══════════════════════════════════════════════════════════════════ */
 void MCAL_Mic_StartRecording(uint8_t maxSec) {
     if (s_state == MIC_STATE_RECORDING) return;
-    if (!s_pcmBuf) return;
+    if (!MCAL_Mic_IsReady()) return;
 
     if (maxSec == 0 || maxSec > MIC_MAX_RECORD_SEC) maxSec = MIC_MAX_RECORD_SEC;
+    if (maxSec < MIC_MIN_RECORD_SEC) maxSec = MIC_MIN_RECORD_SEC;
+    if (maxSec > s_recordCapacitySec) maxSec = s_recordCapacitySec;
 
     /* Clamp to actual buffer capacity */
     uint32_t limitSamples = (uint32_t)maxSec * MIC_SAMPLE_RATE_HZ;

@@ -46,6 +46,7 @@
 
 /* ------ Config ------ */
 #define MIC_SAMPLE_RATE_HZ       4000        /**< ADC sample rate (Hz)          */
+#define MIC_MIN_RECORD_SEC       30          /**< Minimum useful recording (s)  */
 #define MIC_MAX_RECORD_SEC       60          /**< Maximum recording length (s)  */
 #define MIC_MAX_RECORD_SAMPLES   (MIC_SAMPLE_RATE_HZ * MIC_MAX_RECORD_SEC)
                                              /**< = 240 000 int16 samples        */
@@ -110,6 +111,8 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue);
  * @brief Return true when ADC setup and recording buffers are available.
  */
 bool MCAL_Mic_IsReady(void);
+bool MCAL_Mic_IsHardwarePresent(void);
+uint8_t MCAL_Mic_GetRecordCapacitySec(void);
 
 /**
  * @brief  Single sample-and-update tick.

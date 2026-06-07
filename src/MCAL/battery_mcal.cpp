@@ -13,20 +13,67 @@
 /* ═══════════════════════════════════════════════════════════════════
     Private state
     ═══════════════════════════════════════════════════════════════════ */
-static BatteryStatus_t s_status     = { 0.0f, 0, BATTERY_STATE_UNKNOWN, false, false };
+static BatteryStatus_t s_status     = { 0.0f, 0, BATTERY_STATE_UNKNOWN, false, false, false, 0 };
 static float           s_prevV      = 0.0f;
 static uint32_t        s_lastPollMs = 0;
 static bool            s_initialised = false;
 static int32_t         s_forcedRaw  = -1;
+static uint8_t         s_invalidSamples = 0;
+
+#define BATTERY_SAMPLE_BURST       3
+#define BATTERY_INVALID_LIMIT      3
 
 /* ═══════════════════════════════════════════════════════════════════
    Helpers
    ═══════════════════════════════════════════════════════════════════ */
 
 static void doSample(void) {
-    uint16_t raw = (s_forcedRaw >= 0) ? (uint16_t)s_forcedRaw
-                                      : HAL_BatteryAdc_ReadRaw();
-    float    v   = HAL_BatteryAdc_RawToVolts(raw);
+    uint16_t raw = 0;
+    uint16_t minRaw = 4095;
+    uint16_t maxRaw = 0;
+
+    if (s_forcedRaw >= 0) {
+        raw = (uint16_t)s_forcedRaw;
+        minRaw = raw;
+        maxRaw = raw;
+    } else {
+        uint32_t sum = 0;
+        for (uint8_t i = 0; i < BATTERY_SAMPLE_BURST; i++) {
+            uint16_t sample = HAL_BatteryAdc_ReadRaw();
+            sum += sample;
+            if (sample < minRaw) minRaw = sample;
+            if (sample > maxRaw) maxRaw = sample;
+            delayMicroseconds(50);
+        }
+        raw = (uint16_t)(sum / BATTERY_SAMPLE_BURST);
+    }
+
+    float v = HAL_BatteryAdc_RawToVolts(raw);
+
+    bool plausible = MCAL_Battery_IsSamplePlausible(raw, v);
+    bool stable = (s_forcedRaw >= 0) || MCAL_Battery_IsSampleStable(minRaw, maxRaw);
+    if (!plausible || !stable) {
+        if (s_invalidSamples < 255) s_invalidSamples++;
+        s_status.rawAdc = raw;
+
+        if (s_invalidSamples >= BATTERY_INVALID_LIMIT || !s_status.isConnected) {
+            s_status.voltageV = 0.0f;
+            s_status.percent = 0;
+            s_status.state = BATTERY_STATE_UNKNOWN;
+            s_status.isLow = false;
+            s_status.isCritical = false;
+            s_status.isConnected = false;
+            s_prevV = 0.0f;
+        }
+
+#if STETHO_DEBUG_LOGS
+        HAL_UART_Printf("[Battery] Invalid ADC raw=%u min=%u max=%u v=%.2f stable=%d\r\n",
+                        raw, minRaw, maxRaw, v, stable ? 1 : 0);
+#endif
+        return;
+    }
+
+    s_invalidSamples = 0;
 
     /* Clamp to sane range (open-circuit / disconnected protection) */
     if (v < 2.5f) v = 2.5f;
@@ -54,6 +101,8 @@ static void doSample(void) {
     s_status.state      = state;
     s_status.isLow      = (pct <= BATTERY_LOW_THRESHOLD_PCT);
     s_status.isCritical = (pct <= BATTERY_CRITICAL_PCT);
+    s_status.isConnected = true;
+    s_status.rawAdc     = raw;
 
 #if STETHO_DEBUG_LOGS
     HAL_UART_Printf("[Battery] %.2fV %u%% state=%d\r\n", v, pct, (int)state);
