@@ -176,7 +176,9 @@ void MCAL_Mic_StartRecording(uint8_t maxSec) {
     if (s_state == MIC_STATE_RECORDING) return;
     if (!s_pcmBuf) return;
 
-    if (maxSec == 0 || maxSec > MIC_MAX_RECORD_SEC) maxSec = MIC_MAX_RECORD_SEC;
+    /* Enforce min/max time limits */
+    if (maxSec < MIC_MIN_RECORD_SEC) maxSec = MIC_MIN_RECORD_SEC;
+    if (maxSec > MIC_MAX_RECORD_SEC) maxSec = MIC_MAX_RECORD_SEC;
 
     /* Clamp to actual buffer capacity */
     uint32_t limitSamples = (uint32_t)maxSec * MIC_SAMPLE_RATE_HZ;
@@ -287,6 +289,25 @@ uint8_t MCAL_Mic_GetSecondsRemaining(void) {
 uint8_t MCAL_Mic_GetSecondsElapsed(void) {
     if (s_state != MIC_STATE_RECORDING) return 0;
     return (uint8_t)(((uint32_t)millis() - s_recStartMs) / 1000UL);
+}
+
+uint8_t MCAL_Mic_GetAvailableRecordSeconds(void) {
+    /* Calculate how many seconds we can record based on available memory */
+    uint32_t freeHeap = ESP.getFreeHeap();
+    const uint32_t reserve = 80 * 1024; /* keep 80KB headroom for WiFi/RTOS */
+    
+    uint32_t availableBytes = (freeHeap > reserve) ? (freeHeap - reserve) : 0;
+    uint32_t availableSamples = availableBytes / sizeof(int16_t);
+    uint32_t availableSeconds = availableSamples / MIC_SAMPLE_RATE_HZ;
+    
+    /* Clamp to the allowed range */
+    if (availableSeconds < MIC_MIN_RECORD_SEC) {
+        return MIC_MIN_RECORD_SEC;  /* Return minimum, but may fail to allocate */
+    }
+    if (availableSeconds > MIC_MAX_RECORD_SEC) {
+        return MIC_MAX_RECORD_SEC;
+    }
+    return (uint8_t)availableSeconds;
 }
 
 bool MCAL_Mic_GetRecording(MicRecording_t *out) {

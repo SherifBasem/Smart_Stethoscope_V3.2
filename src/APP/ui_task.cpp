@@ -293,6 +293,12 @@ static void renderMenu(const char *title,
                  items[idx]);
         MCAL_OLED_PrintLine(2 + v, line);
     }
+    
+    /* Add down arrow indicator if there are more items below */
+    if (scroll + MENU_VISIBLE < count) {
+        MCAL_OLED_PrintLine(5, "        v");
+    }
+    
     pushDisplay();
 }
 
@@ -462,7 +468,8 @@ static void renderLungSound(QueueHandle_t micQ) {
 
         case MIC_STATE_IDLE:
             snprintf(header,     sizeof(header),     " Lung Sound      ");
-            snprintf(statusLine, sizeof(statusLine), "[SEL]Rec [BCK]Back");
+            uint8_t availSec = MCAL_Mic_GetAvailableRecordSeconds();
+            snprintf(statusLine, sizeof(statusLine), "Rec:%us [SEL]Rec", availSec);
             break;
 
         case MIC_STATE_RECORDING: {
@@ -1243,8 +1250,11 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
             if (evt == BTN_EVENT_SELECT_PRESSED) {
                 switch (ms) {
                     case MIC_STATE_IDLE:
-                        /* Start a 60-second recording */
-                        MCAL_Mic_StartRecording(60);
+                        /* Start recording with available time (between min and max) */
+                        {
+                            uint8_t recSeconds = MCAL_Mic_GetAvailableRecordSeconds();
+                            MCAL_Mic_StartRecording(recSeconds);
+                        }
                         s_lungDirty = true;
                         break;
 
