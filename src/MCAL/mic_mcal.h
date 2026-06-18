@@ -76,6 +76,7 @@ typedef struct {
     uint8_t  barPercent;   /**< 0–100 % mapped from MIC_DB_FLOOR..CEIL      */
     int16_t  peakAmp;      /**< Peak signed amplitude in last window         */
     bool     clipping;     /**< true if any sample saturated ADC             */
+    bool     isConnected;  /**< true if ADC reads valid audio range          */
 } MicLiveReading_t;
 
 /**

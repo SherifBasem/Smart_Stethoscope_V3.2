@@ -49,7 +49,7 @@ static uint32_t  s_recLimitMs    = 0;   /* recording time limit in ms     */
    Live reading (published to queue)
    ═══════════════════════════════════════════════════════════════════ */
 static QueueHandle_t     s_liveQueue    = NULL;
-static MicLiveReading_t  s_lastLive     = {MIC_DB_FLOOR, 0, 0, false};
+static MicLiveReading_t  s_lastLive     = {MIC_DB_FLOOR, 0, 0, false, false};
 
 /* Live-window accumulation counters (reset every MIC_LIVE_WINDOW_SAMPLES) */
 static uint32_t s_windowIdx    = 0;
@@ -229,10 +229,16 @@ void MCAL_Mic_Tick(void) {
     /* ── 4. Publish live reading every MIC_LIVE_WINDOW_SAMPLES ── */
     if (s_windowIdx >= MIC_LIVE_WINDOW_SAMPLES) {
         MicLiveReading_t live;
-    live.dbSPL      = MCAL_Mic_RmsToDb(s_windowSumSq, s_windowIdx);
-    live.barPercent = MCAL_Mic_DbToPercent(live.dbSPL);
+        live.dbSPL      = MCAL_Mic_RmsToDb(s_windowSumSq, s_windowIdx);
+        live.barPercent = MCAL_Mic_DbToPercent(live.dbSPL);
         live.peakAmp    = s_windowPeak;
         live.clipping   = (s_windowPeak >= 2040);   /* near ADC saturation */
+        
+        /* Connection detection: ADC should have reasonable signal variation
+           If peak is very low (< 30) consistently, mic not connected.
+           If always saturated (peak >= 2047), also indicates problem.  */
+        bool connected = (s_windowPeak > 30 && s_windowPeak < 2040);
+        live.isConnected = connected;
 
         s_lastLive = live;
         if (s_liveQueue) xQueueOverwrite(s_liveQueue, &live);

@@ -1482,7 +1482,11 @@ static void doSleep(TickType_t *lastWake) {
         while (xSemaphoreTake(g_btnSemaphore, 0) == pdTRUE) { /* drop */ }
     }
     MCAL_Button_ReinitPins();
+    vTaskDelay(pdMS_TO_TICKS(50));  /* Allow GPIO pins to stabilize after sleep */
     MCAL_Button_Reset();
+    /* Clear any stale button events that may have accumulated during sleep */
+    ButtonEvent_t dummy;
+    while (MCAL_Button_GetEvent(&dummy)) { /* drain queue */ }
 }
 
 /* ══════════════════════════════════════════════════════════════════
