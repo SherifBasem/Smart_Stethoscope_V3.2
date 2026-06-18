@@ -304,6 +304,12 @@ static void renderMenu(const char *title,
         }
         MCAL_OLED_PrintLine(2 + v, line);
     }
+    
+    /* Add down arrow indicator if there are more items below */
+    if (scroll + MENU_VISIBLE < count) {
+        MCAL_OLED_PrintLine(5, "        v");
+    }
+    
     pushDisplay();
 }
 
@@ -473,8 +479,13 @@ static void renderLungSound(QueueHandle_t micQ) {
 
         case MIC_STATE_IDLE:
             snprintf(header,     sizeof(header),     " Lung Sound      ");
+<<<<<<< HEAD
             snprintf(statusLine, sizeof(statusLine), "%us [SEL]Rec [BCK]",
                      MCAL_Mic_GetRecordCapacitySec());
+=======
+            uint8_t availSec = MCAL_Mic_GetAvailableRecordSeconds();
+            snprintf(statusLine, sizeof(statusLine), "Rec:%us [SEL]Rec", availSec);
+>>>>>>> Shefo's-try-to-fix-the-errors
             break;
 
         case MIC_STATE_RECORDING: {
@@ -822,6 +833,10 @@ static void renderBatteryInfo(void) {
     }
     MCAL_OLED_PrintLine(2, line);
 
+    const char *connStatus = s_battery.isConnected ? "Connected" : "NOT CONNECTED";
+    snprintf(line, sizeof(line), " %s", connStatus);
+    MCAL_OLED_PrintLine(3, line);
+
     const char *stateLabel;
     switch (s_battery.state) {
         case BATTERY_STATE_CHARGING:    stateLabel = "CHG";  break;
@@ -829,12 +844,17 @@ static void renderBatteryInfo(void) {
         case BATTERY_STATE_DISCHARGING: stateLabel = "DIS";  break;
         default:                        stateLabel = "???";  break;
     }
+<<<<<<< HEAD
     if (s_battery.isConnected) {
         snprintf(line, sizeof(line), " %u%%  [%s]", s_battery.percent, stateLabel);
     } else {
         snprintf(line, sizeof(line), " ---  [N/C]");
     }
     MCAL_OLED_PrintLine(3, line);
+=======
+    snprintf(line, sizeof(line), " %u%%  [%s]", s_battery.percent, stateLabel);
+    MCAL_OLED_PrintLine(4, line);
+>>>>>>> Shefo's-try-to-fix-the-errors
 
     const uint8_t BAR_CHARS = 18;
     uint8_t filled = s_battery.isConnected
@@ -846,16 +866,21 @@ static void renderBatteryInfo(void) {
         bar[1 + i] = (i < filled) ? (char)0xFF : '-';
     }
     bar[1 + BAR_CHARS] = '\0';
-    MCAL_OLED_PrintLine(4, bar);
+    MCAL_OLED_PrintLine(5, bar);
 
+<<<<<<< HEAD
     if (!s_battery.isConnected) {
         MCAL_OLED_PrintLine(5, " Battery not conn");
     } else if (s_battery.isCritical) {
         MCAL_OLED_PrintLine(5, "!! CRITICAL LOW !!");
+=======
+    if (s_battery.isCritical) {
+        MCAL_OLED_PrintLine(6, "!! CRITICAL LOW !!");
+>>>>>>> Shefo's-try-to-fix-the-errors
     } else if (s_battery.isLow) {
-        MCAL_OLED_PrintLine(5, "! Low battery");
+        MCAL_OLED_PrintLine(6, "! Low battery");
     } else {
-        MCAL_OLED_PrintLine(5, "[BACK] Return");
+        MCAL_OLED_PrintLine(6, "[BACK] Return");
     }
 
     pushDisplay();
@@ -1274,7 +1299,15 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
             if (evt == BTN_EVENT_SELECT_PRESSED) {
                 switch (ms) {
                     case MIC_STATE_IDLE:
+<<<<<<< HEAD
                         MCAL_Mic_StartRecording(MCAL_Mic_GetRecordCapacitySec());
+=======
+                        /* Start recording with available time (between min and max) */
+                        {
+                            uint8_t recSeconds = MCAL_Mic_GetAvailableRecordSeconds();
+                            MCAL_Mic_StartRecording(recSeconds);
+                        }
+>>>>>>> Shefo's-try-to-fix-the-errors
                         s_lungDirty = true;
                         break;
 
@@ -1418,6 +1451,9 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
             break;
 
         case UI_SCREEN_BATTERY_INFO:
+            if (evt == BTN_EVENT_SELECT_PRESSED) {
+                goTo(UI_SCREEN_SYSTEM_INFO);
+            }
             break;
 
         case UI_SCREEN_WIFI_SETUP:
@@ -1513,7 +1549,11 @@ static void doSleep(TickType_t *lastWake) {
         while (xSemaphoreTake(g_btnSemaphore, 0) == pdTRUE) { /* drop */ }
     }
     MCAL_Button_ReinitPins();
+    vTaskDelay(pdMS_TO_TICKS(50));  /* Allow GPIO pins to stabilize after sleep */
     MCAL_Button_Reset();
+    /* Clear any stale button events that may have accumulated during sleep */
+    ButtonEvent_t dummy;
+    while (MCAL_Button_GetEvent(&dummy)) { /* drain queue */ }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1522,6 +1562,7 @@ static void doSleep(TickType_t *lastWake) {
 void UITask(void *pvParams) {
     UITask_Params_t *p = (UITask_Params_t *)pvParams;
 
+    MCAL_Battery_ForceRefresh();
     MCAL_Battery_GetStatus(&s_battery);
 
     s_screen = UI_SCREEN_BOOT;

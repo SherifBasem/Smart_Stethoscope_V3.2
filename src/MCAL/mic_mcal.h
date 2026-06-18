@@ -46,7 +46,11 @@
 
 /* ------ Config ------ */
 #define MIC_SAMPLE_RATE_HZ       4000        /**< ADC sample rate (Hz)          */
+<<<<<<< HEAD
 #define MIC_MIN_RECORD_SEC       30          /**< Minimum useful recording (s)  */
+=======
+#define MIC_MIN_RECORD_SEC       30          /**< Minimum recording length (s)  */
+>>>>>>> Shefo's-try-to-fix-the-errors
 #define MIC_MAX_RECORD_SEC       60          /**< Maximum recording length (s)  */
 #define MIC_MAX_RECORD_SAMPLES   (MIC_SAMPLE_RATE_HZ * MIC_MAX_RECORD_SEC)
                                              /**< = 240 000 int16 samples        */
@@ -77,6 +81,7 @@ typedef struct {
     uint8_t  barPercent;   /**< 0–100 % mapped from MIC_DB_FLOOR..CEIL      */
     int16_t  peakAmp;      /**< Peak signed amplitude in last window         */
     bool     clipping;     /**< true if any sample saturated ADC             */
+    bool     isConnected;  /**< true if ADC reads valid audio range          */
 } MicLiveReading_t;
 
 /**
@@ -168,6 +173,14 @@ uint8_t MCAL_Mic_GetSecondsRemaining(void);
  * @brief  Return elapsed recording time in seconds.
  */
 uint8_t MCAL_Mic_GetSecondsElapsed(void);
+
+/**
+ * @brief  Calculate available recording seconds based on free heap memory.
+ *         Returns the maximum seconds recordable with current available memory,
+ *         clamped to MIC_MIN_RECORD_SEC..MIC_MAX_RECORD_SEC range.
+ * @return Available recording seconds
+ */
+uint8_t MCAL_Mic_GetAvailableRecordSeconds(void);
 
 /**
  * @brief  Peek at the latest live reading from the queue (non-blocking).

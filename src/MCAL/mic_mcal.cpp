@@ -51,7 +51,7 @@ static uint32_t  s_recLimitMs    = 0;   /* recording time limit in ms     */
    Live reading (published to queue)
    ═══════════════════════════════════════════════════════════════════ */
 static QueueHandle_t     s_liveQueue    = NULL;
-static MicLiveReading_t  s_lastLive     = {MIC_DB_FLOOR, 0, 0, false};
+static MicLiveReading_t  s_lastLive     = {MIC_DB_FLOOR, 0, 0, false, false};
 
 /* Live-window accumulation counters (reset every MIC_LIVE_WINDOW_SAMPLES) */
 static uint32_t s_windowIdx    = 0;
@@ -222,9 +222,15 @@ void MCAL_Mic_StartRecording(uint8_t maxSec) {
     if (s_state == MIC_STATE_RECORDING) return;
     if (!MCAL_Mic_IsReady()) return;
 
+<<<<<<< HEAD
     if (maxSec == 0 || maxSec > MIC_MAX_RECORD_SEC) maxSec = MIC_MAX_RECORD_SEC;
     if (maxSec < MIC_MIN_RECORD_SEC) maxSec = MIC_MIN_RECORD_SEC;
     if (maxSec > s_recordCapacitySec) maxSec = s_recordCapacitySec;
+=======
+    /* Enforce min/max time limits */
+    if (maxSec < MIC_MIN_RECORD_SEC) maxSec = MIC_MIN_RECORD_SEC;
+    if (maxSec > MIC_MAX_RECORD_SEC) maxSec = MIC_MAX_RECORD_SEC;
+>>>>>>> Shefo's-try-to-fix-the-errors
 
     /* Clamp to actual buffer capacity */
     uint32_t limitSamples = (uint32_t)maxSec * MIC_SAMPLE_RATE_HZ;
@@ -277,10 +283,16 @@ void MCAL_Mic_Tick(void) {
     /* ── 4. Publish live reading every MIC_LIVE_WINDOW_SAMPLES ── */
     if (s_windowIdx >= MIC_LIVE_WINDOW_SAMPLES) {
         MicLiveReading_t live;
-    live.dbSPL      = MCAL_Mic_RmsToDb(s_windowSumSq, s_windowIdx);
-    live.barPercent = MCAL_Mic_DbToPercent(live.dbSPL);
+        live.dbSPL      = MCAL_Mic_RmsToDb(s_windowSumSq, s_windowIdx);
+        live.barPercent = MCAL_Mic_DbToPercent(live.dbSPL);
         live.peakAmp    = s_windowPeak;
         live.clipping   = (s_windowPeak >= 2040);   /* near ADC saturation */
+        
+        /* Connection detection: ADC should have reasonable signal variation
+           If peak is very low (< 30) consistently, mic not connected.
+           If always saturated (peak >= 2047), also indicates problem.  */
+        bool connected = (s_windowPeak > 30 && s_windowPeak < 2040);
+        live.isConnected = connected;
 
         s_lastLive = live;
         if (s_liveQueue) xQueueOverwrite(s_liveQueue, &live);
@@ -329,6 +341,25 @@ uint8_t MCAL_Mic_GetSecondsRemaining(void) {
 uint8_t MCAL_Mic_GetSecondsElapsed(void) {
     if (s_state != MIC_STATE_RECORDING) return 0;
     return (uint8_t)(((uint32_t)millis() - s_recStartMs) / 1000UL);
+}
+
+uint8_t MCAL_Mic_GetAvailableRecordSeconds(void) {
+    /* Calculate how many seconds we can record based on available memory */
+    uint32_t freeHeap = ESP.getFreeHeap();
+    const uint32_t reserve = 80 * 1024; /* keep 80KB headroom for WiFi/RTOS */
+    
+    uint32_t availableBytes = (freeHeap > reserve) ? (freeHeap - reserve) : 0;
+    uint32_t availableSamples = availableBytes / sizeof(int16_t);
+    uint32_t availableSeconds = availableSamples / MIC_SAMPLE_RATE_HZ;
+    
+    /* Clamp to the allowed range */
+    if (availableSeconds < MIC_MIN_RECORD_SEC) {
+        return MIC_MIN_RECORD_SEC;  /* Return minimum, but may fail to allocate */
+    }
+    if (availableSeconds > MIC_MAX_RECORD_SEC) {
+        return MIC_MAX_RECORD_SEC;
+    }
+    return (uint8_t)availableSeconds;
 }
 
 bool MCAL_Mic_GetRecording(MicRecording_t *out) {
