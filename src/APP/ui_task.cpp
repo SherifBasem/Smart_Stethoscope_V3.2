@@ -1398,6 +1398,9 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
             break;
 
         case UI_SCREEN_BATTERY_INFO:
+            if (evt == BTN_EVENT_SELECT_PRESSED) {
+                goTo(UI_SCREEN_SYSTEM_INFO);
+            }
             break;
 
         case UI_SCREEN_WIFI_SETUP:
