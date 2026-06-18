@@ -13,7 +13,7 @@
 /* ═══════════════════════════════════════════════════════════════════
     Private state
     ═══════════════════════════════════════════════════════════════════ */
-static BatteryStatus_t s_status     = { 0.0f, 0, BATTERY_STATE_UNKNOWN, false, false };
+static BatteryStatus_t s_status     = { 0.0f, 0, BATTERY_STATE_UNKNOWN, false, false, false };
 static float           s_prevV      = 0.0f;
 static uint32_t        s_lastPollMs = 0;
 static bool            s_initialised = false;
@@ -31,6 +31,9 @@ static void doSample(void) {
     /* Clamp to sane range (open-circuit / disconnected protection) */
     if (v < 2.5f) v = 2.5f;
     if (v > 4.5f) v = 4.5f;
+
+    /* Validate ADC connection: voltage should be between 3.0V and 4.3V for a healthy LiPo */
+    bool connected = (v >= 3.0f && v <= 4.3f);
 
     uint8_t pct = MCAL_Battery_VoltToPct(v);
 
@@ -54,9 +57,11 @@ static void doSample(void) {
     s_status.state      = state;
     s_status.isLow      = (pct <= BATTERY_LOW_THRESHOLD_PCT);
     s_status.isCritical = (pct <= BATTERY_CRITICAL_PCT);
+    s_status.isConnected = connected;
 
 #if STETHO_DEBUG_LOGS
-    HAL_UART_Printf("[Battery] %.2fV %u%% state=%d\r\n", v, pct, (int)state);
+    HAL_UART_Printf("[Battery] %.2fV %u%% state=%d connected=%s\r\n", 
+                     v, pct, (int)state, connected ? "YES" : "NO");
 #endif
 }
 

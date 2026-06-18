@@ -800,6 +800,10 @@ static void renderBatteryInfo(void) {
     snprintf(line, sizeof(line), " Volt: %.3f V", s_battery.voltageV);
     MCAL_OLED_PrintLine(2, line);
 
+    const char *connStatus = s_battery.isConnected ? "Connected" : "NOT CONNECTED";
+    snprintf(line, sizeof(line), " %s", connStatus);
+    MCAL_OLED_PrintLine(3, line);
+
     const char *stateLabel;
     switch (s_battery.state) {
         case BATTERY_STATE_CHARGING:    stateLabel = "CHG";  break;
@@ -808,7 +812,7 @@ static void renderBatteryInfo(void) {
         default:                        stateLabel = "???";  break;
     }
     snprintf(line, sizeof(line), " %u%%  [%s]", s_battery.percent, stateLabel);
-    MCAL_OLED_PrintLine(3, line);
+    MCAL_OLED_PrintLine(4, line);
 
     const uint8_t BAR_CHARS = 18;
     uint8_t filled = (uint8_t)((s_battery.percent * BAR_CHARS) / 100);
@@ -818,14 +822,14 @@ static void renderBatteryInfo(void) {
         bar[1 + i] = (i < filled) ? (char)0xFF : '-';
     }
     bar[1 + BAR_CHARS] = '\0';
-    MCAL_OLED_PrintLine(4, bar);
+    MCAL_OLED_PrintLine(5, bar);
 
     if (s_battery.isCritical) {
-        MCAL_OLED_PrintLine(5, "!! CRITICAL LOW !!");
+        MCAL_OLED_PrintLine(6, "!! CRITICAL LOW !!");
     } else if (s_battery.isLow) {
-        MCAL_OLED_PrintLine(5, "! Low battery");
+        MCAL_OLED_PrintLine(6, "! Low battery");
     } else {
-        MCAL_OLED_PrintLine(5, "[BACK] Return");
+        MCAL_OLED_PrintLine(6, "[BACK] Return");
     }
 
     pushDisplay();
@@ -1487,6 +1491,7 @@ static void doSleep(TickType_t *lastWake) {
 void UITask(void *pvParams) {
     UITask_Params_t *p = (UITask_Params_t *)pvParams;
 
+    MCAL_Battery_ForceRefresh();
     MCAL_Battery_GetStatus(&s_battery);
 
     s_screen = UI_SCREEN_BOOT;
