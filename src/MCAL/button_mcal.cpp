@@ -113,6 +113,19 @@ void MCAL_Button_Reset(void) {
     }
 }
 
+void MCAL_Button_SyncReleased(void) {
+    uint32_t now = (uint32_t)millis();
+    for (int i = 0; i < 4; i++) {
+        bool isPressed = (HAL_GPIO_Read(BTN_PINS[i]) == HAL_GPIO_LOW);
+        s_btn[i].wasPressed = isPressed;
+        s_btn[i].pressedAt  = isPressed ? now : 0;
+        s_btn[i].heldFired  = isPressed;
+    }
+    if (s_queue) {
+        xQueueReset(s_queue);
+    }
+}
+
 void MCAL_Button_ReinitPins(void) {
     for (int i = 0; i < 4; i++) {
         HAL_GPIO_Init(BTN_PINS[i], HAL_GPIO_MODE_INPUT_PULLUP);

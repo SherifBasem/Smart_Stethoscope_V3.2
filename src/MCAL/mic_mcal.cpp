@@ -130,7 +130,10 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue) {
         s_pcmBuf = (int16_t *)ps_malloc((size_t)MIC_MAX_RECORD_SAMPLES * sizeof(int16_t));
         if (s_pcmBuf) {
             s_pcmCapacity = MIC_MAX_RECORD_SAMPLES;
-            HAL_UART_SendLine("[Mic] PCM buffer in PSRAM (60 s).");
+            HAL_UART_Printf("[Mic] PCM buffer in PSRAM: %lu bytes = %lu s at %lu B/s.\r\n",
+                            (unsigned long)(s_pcmCapacity * sizeof(int16_t)),
+                            (unsigned long)(s_pcmCapacity / MIC_SAMPLE_RATE_HZ),
+                            (unsigned long)MIC_RECORD_BYTES_PER_SEC);
         }
     }
 
@@ -143,8 +146,8 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue) {
         uint32_t targetSamples = MIC_MAX_RECORD_SAMPLES;
         uint32_t fallbackSamples = (maxSamples < targetSamples) ? maxSamples : targetSamples;
 
-        if (fallbackSamples < (MIC_SAMPLE_RATE_HZ * MIC_MIN_RECORD_SEC)) {
-            HAL_UART_Printf("[Mic] FATAL: insufficient heap for minimum PCM buffer (free=%lu).\r\n",
+        if (fallbackSamples < MIC_SAMPLE_RATE_HZ) {
+            HAL_UART_Printf("[Mic] FATAL: insufficient heap for 1 second PCM buffer (free=%lu).\r\n",
                              (unsigned long)freeHeap);
             return false;
         }
@@ -152,8 +155,10 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue) {
         s_pcmBuf = (int16_t *)malloc(fallbackSamples * sizeof(int16_t));
         if (s_pcmBuf) {
             s_pcmCapacity = fallbackSamples;
-            HAL_UART_Printf("[Mic] PCM buffer in heap (%lu s). No PSRAM.\r\n",
-                             (unsigned long)(fallbackSamples / MIC_SAMPLE_RATE_HZ));
+            HAL_UART_Printf("[Mic] PCM buffer in heap: %lu bytes = %lu s at %lu B/s. No PSRAM.\r\n",
+                             (unsigned long)(s_pcmCapacity * sizeof(int16_t)),
+                             (unsigned long)(fallbackSamples / MIC_SAMPLE_RATE_HZ),
+                             (unsigned long)MIC_RECORD_BYTES_PER_SEC);
         } else {
             HAL_UART_SendLine("[Mic] FATAL: PCM buffer allocation failed!");
             return false;
@@ -169,20 +174,24 @@ bool MCAL_Mic_Init(QueueHandle_t liveQueue) {
         s_pcmCapacity, MIC_SAMPLE_RATE_HZ, MIC_MIN_RECORD_SEC, MIC_MAX_RECORD_SEC);
 
     if (s_recordCapacitySec == 0) {
-        HAL_UART_SendLine("[Mic] FATAL: recording capacity below 30 seconds.");
+        HAL_UART_SendLine("[Mic] FATAL: recording capacity below 1 second.");
         return false;
     }
 
     if (!s_micHardwarePresent) {
+        HAL_UART_Printf("[Mic] Record capacity available, but self-check failed: %u s.\r\n",
+                        s_recordCapacitySec);
         return false;
     }
 
-    HAL_UART_SendLine("[Mic] MCAL init OK (sensor idle).");
+    HAL_UART_Printf("[Mic] MCAL init OK. Record capacity: %u s (%lu bytes/sec PCM).\r\n",
+                    s_recordCapacitySec,
+                    (unsigned long)MIC_RECORD_BYTES_PER_SEC);
     return true;
 }
 
 bool MCAL_Mic_IsReady(void) {
-    return (s_pcmBuf != nullptr && s_micHardwarePresent && s_recordCapacitySec >= MIC_MIN_RECORD_SEC);
+    return (s_pcmBuf != nullptr && s_micHardwarePresent && s_recordCapacitySec > 0);
 }
 
 bool MCAL_Mic_IsHardwarePresent(void) {
@@ -220,11 +229,19 @@ bool MCAL_Mic_IsActive(void) {
    ═══════════════════════════════════════════════════════════════════ */
 void MCAL_Mic_StartRecording(uint8_t maxSec) {
     if (s_state == MIC_STATE_RECORDING) return;
-    if (!MCAL_Mic_IsReady()) return;
+    if (!MCAL_Mic_IsReady()) {
+        HAL_UART_Printf("[Mic] Cannot start recording: hw=%s capacity=%u s buffer=%s.\r\n",
+                        s_micHardwarePresent ? "OK" : "FAIL",
+                        s_recordCapacitySec,
+                        s_pcmBuf ? "OK" : "NULL");
+        return;
+    }
 
     /* Enforce min/max time limits */
+    if (maxSec == 0) maxSec = s_recordCapacitySec;
     if (maxSec < MIC_MIN_RECORD_SEC) maxSec = MIC_MIN_RECORD_SEC;
     if (maxSec > MIC_MAX_RECORD_SEC) maxSec = MIC_MAX_RECORD_SEC;
+    if (maxSec > s_recordCapacitySec) maxSec = s_recordCapacitySec;
 
     /* Clamp to actual buffer capacity */
     uint32_t limitSamples = (uint32_t)maxSec * MIC_SAMPLE_RATE_HZ;
@@ -338,22 +355,7 @@ uint8_t MCAL_Mic_GetSecondsElapsed(void) {
 }
 
 uint8_t MCAL_Mic_GetAvailableRecordSeconds(void) {
-    /* Calculate how many seconds we can record based on available memory */
-    uint32_t freeHeap = ESP.getFreeHeap();
-    const uint32_t reserve = 80 * 1024; /* keep 80KB headroom for WiFi/RTOS */
-    
-    uint32_t availableBytes = (freeHeap > reserve) ? (freeHeap - reserve) : 0;
-    uint32_t availableSamples = availableBytes / sizeof(int16_t);
-    uint32_t availableSeconds = availableSamples / MIC_SAMPLE_RATE_HZ;
-    
-    /* Clamp to the allowed range */
-    if (availableSeconds < MIC_MIN_RECORD_SEC) {
-        return MIC_MIN_RECORD_SEC;  /* Return minimum, but may fail to allocate */
-    }
-    if (availableSeconds > MIC_MAX_RECORD_SEC) {
-        return MIC_MAX_RECORD_SEC;
-    }
-    return (uint8_t)availableSeconds;
+    return s_recordCapacitySec;
 }
 
 bool MCAL_Mic_GetRecording(MicRecording_t *out) {

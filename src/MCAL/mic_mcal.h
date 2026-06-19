@@ -46,9 +46,10 @@
 
 /* ------ Config ------ */
 #define MIC_SAMPLE_RATE_HZ       4000                                               /**< ADC sample rate (Hz)          */
-#define MIC_MIN_RECORD_SEC       30                                                 /**< Minimum recording length (s)  */
+#define MIC_MIN_RECORD_SEC       1                                                  /**< Minimum recording length (s)  */
 #define MIC_MAX_RECORD_SEC       60                                                 /**< Maximum recording length (s)  */
 #define MIC_MAX_RECORD_SAMPLES   (MIC_SAMPLE_RATE_HZ * MIC_MAX_RECORD_SEC)          /**< = 240 000 int16 samples       */
+#define MIC_RECORD_BYTES_PER_SEC (MIC_SAMPLE_RATE_HZ * 2UL)                         /**< signed 16-bit mono PCM        */
 #define MIC_LIVE_WINDOW_MS       100                                                /**< Window for dBSPL / peak calc  */
 #define MIC_LIVE_WINDOW_SAMPLES  (MIC_SAMPLE_RATE_HZ * MIC_LIVE_WINDOW_MS / 1000)   /**< = 400 samples                 */
 #define MIC_DB_FLOOR             30.0f                                              /**< Silence floor (dBSPL ref)     */
@@ -169,9 +170,7 @@ uint8_t MCAL_Mic_GetSecondsRemaining(void);
 uint8_t MCAL_Mic_GetSecondsElapsed(void);
 
 /**
- * @brief  Calculate available recording seconds based on free heap memory.
- *         Returns the maximum seconds recordable with current available memory,
- *         clamped to MIC_MIN_RECORD_SEC..MIC_MAX_RECORD_SEC range.
+ * @brief  Return seconds available in the already allocated PCM buffer.
  * @return Available recording seconds
  */
 uint8_t MCAL_Mic_GetAvailableRecordSeconds(void);

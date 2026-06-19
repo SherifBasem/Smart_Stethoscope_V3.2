@@ -69,6 +69,13 @@ bool MCAL_Button_GetEvent(ButtonEvent_t *event);
 void MCAL_Button_Reset(void);
 
 /**
+ * @brief  Sync internal state to the current physical button levels.
+ *         Held-low buttons are marked already handled so wake presses
+ *         do not become stuck navigation events.
+ */
+void MCAL_Button_SyncReleased(void);
+
+/**
  * @brief  Re-initialize button GPIO pins (pull-ups) after sleep.
  */
 void MCAL_Button_ReinitPins(void);

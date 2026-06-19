@@ -9,6 +9,7 @@ static bool s_oledReady = false;
 // ════════════════════════════════════════════════════════════
 bool MCAL_OLED_Init(uint8_t sda, uint8_t scl, uint8_t addr) {
   Wire.begin(sda, scl);
+  Wire.setClock(I2C_HAL_FREQ_HZ);
   if (!display.begin(SSD1306_SWITCHCAPVCC, addr)) {
     Serial.println("[OLED] SSD1306 init failed!");
     s_oledReady = false;

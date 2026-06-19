@@ -39,7 +39,9 @@ static void MicUploadTask(void *pvParams) {
    ═══════════════════════════════════════════════════════════════════ */
 void MicTask_SetActive(bool active) {
     if (active && !MCAL_Mic_IsReady()) {
-        HAL_UART_SendLine("[Mic] Screen opened, but MAX4466/ADC path is unavailable.");
+        HAL_UART_Printf("[Mic] Screen opened, but mic is not ready: hw=%s capacity=%u s.\r\n",
+                        MCAL_Mic_IsHardwarePresent() ? "OK" : "FAIL",
+                        MCAL_Mic_GetRecordCapacitySec());
         s_active = false;
         return;
     }

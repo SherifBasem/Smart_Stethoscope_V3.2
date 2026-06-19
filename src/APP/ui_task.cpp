@@ -24,6 +24,7 @@
 #include "../MCAL/qrcode_mcal.h"
 #include "../MCAL/battery_mcal.h"
 #include "../MCAL/mic_mcal.h"
+#include "../HAL/i2c_hal.h"
 #include "../HAL/uart_hal.h"
 #include "heart_task.h"
 #include "mic_task.h"
@@ -335,9 +336,39 @@ static void configureWakeupPins(void) {
         BTN_UP_PIN, BTN_DOWN_PIN, BTN_SELECT_PIN, BTN_BACK_PIN
     };
     for (uint8_t i = 0; i < 4; i++) {
-        gpio_wakeup_enable((gpio_num_t)pins[i], GPIO_INTR_LOW_LEVEL);
+        gpio_num_t pin = (gpio_num_t)pins[i];
+        gpio_reset_pin(pin);
+        gpio_set_direction(pin, GPIO_MODE_INPUT);
+        gpio_pullup_en(pin);
+        gpio_pulldown_dis(pin);
+        gpio_wakeup_enable(pin, GPIO_INTR_LOW_LEVEL);
     }
     esp_sleep_enable_gpio_wakeup();
+}
+
+static void disableWakeupPins(void) {
+    const uint8_t pins[] = {
+        BTN_UP_PIN, BTN_DOWN_PIN, BTN_SELECT_PIN, BTN_BACK_PIN
+    };
+    for (uint8_t i = 0; i < 4; i++) {
+        gpio_num_t pin = (gpio_num_t)pins[i];
+        gpio_wakeup_disable(pin);
+        gpio_reset_pin(pin);
+        gpio_set_direction(pin, GPIO_MODE_INPUT);
+        gpio_pullup_en(pin);
+        gpio_pulldown_dis(pin);
+    }
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
+}
+
+static bool anyButtonPressed(void) {
+    const uint8_t pins[] = {
+        BTN_UP_PIN, BTN_DOWN_PIN, BTN_SELECT_PIN, BTN_BACK_PIN
+    };
+    for (uint8_t i = 0; i < 4; i++) {
+        if (HAL_GPIO_Read(pins[i]) == HAL_GPIO_LOW) return true;
+    }
+    return false;
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -433,8 +464,11 @@ static void renderLungSound(QueueHandle_t micQ) {
         MCAL_OLED_Clear();
         oledTitle(" Lung Sound ");
         oledDivider();
+        char line[22];
+        uint8_t capSec = MCAL_Mic_GetRecordCapacitySec();
         MCAL_OLED_PrintLine(2, MCAL_Mic_IsHardwarePresent() ? " Memory too low" : " Mic unavailable");
-        MCAL_OLED_PrintLine(3, MCAL_Mic_IsHardwarePresent() ? " Need 30s buffer" : " Check MAX4466");
+        snprintf(line, sizeof(line), " Buffer: %us", capSec);
+        MCAL_OLED_PrintLine(3, line);
         MCAL_OLED_PrintLine(4, " See UART logs");
         MCAL_OLED_PrintLine(5, "[BACK] Return");
         pushDisplay();
@@ -1221,7 +1255,7 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
                 goTo(s_systemInfoReturn); break;
 
             case UI_SCREEN_BATTERY_INFO:
-                goTo(UI_SCREEN_SYSTEM_INFO); break;
+                goTo(UI_SCREEN_MAIN_MENU); break;
 
             case UI_SCREEN_BRIGHTNESS:
             case UI_SCREEN_INACTIVITY:
@@ -1427,9 +1461,7 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
             break;
 
         case UI_SCREEN_BATTERY_INFO:
-            if (evt == BTN_EVENT_SELECT_PRESSED) {
-                goTo(UI_SCREEN_SYSTEM_INFO);
-            }
+            if (evt == BTN_EVENT_SELECT_PRESSED) goTo(UI_SCREEN_MAIN_MENU);
             break;
 
         case UI_SCREEN_WIFI_SETUP:
@@ -1501,6 +1533,7 @@ static void doSleep(TickType_t *lastWake) {
     esp_light_sleep_start();
 
     HAL_UART_SendLine("[UI] Woke from light-sleep.");
+    disableWakeupPins();
 
     if (heartWasOn) HeartTask_SetActive(true);
     if (micWasOn)   MicTask_SetActive(true);       /* ← NEW */
@@ -1508,6 +1541,7 @@ static void doSleep(TickType_t *lastWake) {
     *lastWake = xTaskGetTickCount();
 
     s_lastActivityMs = (uint32_t)millis();
+    s_lastLoopUs     = 0;
     s_lastScreen     = (UIScreen_t)-1;
     s_heartDirty     = true;
     s_wifiDirty      = true;
@@ -1516,20 +1550,37 @@ static void doSleep(TickType_t *lastWake) {
     s_lastUptimeSec  = 0;
     s_lastBattPct    = 255;
     s_lastBattConnected = false;
-    applyBrightness();
-
-    MCAL_Battery_ForceRefresh();
-    MCAL_Battery_GetStatus(&s_battery);
 
     if (g_btnSemaphore) {
         while (xSemaphoreTake(g_btnSemaphore, 0) == pdTRUE) { /* drop */ }
     }
     MCAL_Button_ReinitPins();
-    vTaskDelay(pdMS_TO_TICKS(50));  /* Allow GPIO pins to stabilize after sleep */
-    MCAL_Button_Reset();
+
+    uint32_t releaseStart = (uint32_t)millis();
+    while (anyButtonPressed() &&
+           ((uint32_t)millis() - releaseStart) < 1500UL) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    if (anyButtonPressed()) {
+        HAL_UART_SendLine("[UI] Wake button still held/stuck; resetting input state anyway.");
+    }
+
+    MCAL_Button_SyncReleased();
     /* Clear any stale button events that may have accumulated during sleep */
     ButtonEvent_t dummy;
     while (MCAL_Button_GetEvent(&dummy)) { /* drain queue */ }
+    if (g_btnSemaphore) {
+        while (xSemaphoreTake(g_btnSemaphore, 0) == pdTRUE) { /* drop */ }
+    }
+
+    HAL_I2C_Init();
+    MCAL_OLED_Init();
+    applyBrightness();
+
+    MCAL_Battery_ForceRefresh();
+    MCAL_Battery_GetStatus(&s_battery);
+
+    MCAL_OLED_Clear();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1608,6 +1659,7 @@ void UITask(void *pvParams) {
         if (allowSleep && s_screen != UI_SCREEN_HEART_MONITOR && timeoutMs > 0 &&
             ((uint32_t)millis() - s_lastActivityMs) >= timeoutMs) {
             doSleep(&lastWake);
+            goTo(UI_SCREEN_MAIN_MENU);
             hadInput = false;
         }
 
@@ -1733,11 +1785,7 @@ void UITask(void *pvParams) {
         uint32_t delta = (uint32_t)(t1 - t0);
         if (delta > s_timing.wcet_us) s_timing.wcet_us = delta;
 
-        if (g_btnSemaphore) {
-            xSemaphoreTake(g_btnSemaphore, pdMS_TO_TICKS(UI_POLL_INTERVAL_MS));
-        } else {
-            vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(UI_POLL_INTERVAL_MS));
-        }
+        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(UI_POLL_INTERVAL_MS));
     }
 }
 
