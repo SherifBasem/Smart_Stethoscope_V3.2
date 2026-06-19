@@ -87,6 +87,10 @@ void MCAL_OLED_Push();
  * @param level brightness level (0-255)
  */
 void MCAL_OLED_SetBrightness(uint8_t level);
+/**
+ * @brief Turn the SSD1306 panel output on/off without losing the buffer.
+ */
+void MCAL_OLED_SetDisplayOn(bool on);
 /** 
  * @brief Flip the screen 180 degrees 
  * @param flipped true to flip, false to reset

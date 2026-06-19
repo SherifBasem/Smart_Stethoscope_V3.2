@@ -30,10 +30,8 @@
 #include "mic_task.h"
 #include <stdio.h>
 #include <string.h>
-#include <esp_sleep.h>
 #include <esp_system.h>
 #include <HTTPClient.h>
-#include <driver/gpio.h>
 #include <freertos/semphr.h>
 #include <esp_timer.h>
 
@@ -334,34 +332,6 @@ static void menuDown(uint8_t *sel, uint8_t *scroll, uint8_t count) {
 /* ══════════════════════════════════════════════════════════════════
    Sleep helpers
    ══════════════════════════════════════════════════════════════════ */
-static void configureWakeupPins(void) {
-    const uint8_t pins[] = {
-        BTN_UP_PIN, BTN_DOWN_PIN, BTN_SELECT_PIN, BTN_BACK_PIN
-    };
-    for (uint8_t i = 0; i < 4; i++) {
-        gpio_num_t pin = (gpio_num_t)pins[i];
-        gpio_set_direction(pin, GPIO_MODE_INPUT);
-        gpio_pullup_en(pin);
-        gpio_pulldown_dis(pin);
-        gpio_wakeup_enable(pin, GPIO_INTR_LOW_LEVEL);
-    }
-    esp_sleep_enable_gpio_wakeup();
-}
-
-static void disableWakeupPins(void) {
-    const uint8_t pins[] = {
-        BTN_UP_PIN, BTN_DOWN_PIN, BTN_SELECT_PIN, BTN_BACK_PIN
-    };
-    for (uint8_t i = 0; i < 4; i++) {
-        gpio_num_t pin = (gpio_num_t)pins[i];
-        gpio_wakeup_disable(pin);
-        gpio_set_direction(pin, GPIO_MODE_INPUT);
-        gpio_pullup_en(pin);
-        gpio_pulldown_dis(pin);
-    }
-    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
-}
-
 static bool anyButtonPressed(void) {
     const uint8_t pins[] = {
         BTN_UP_PIN, BTN_DOWN_PIN, BTN_SELECT_PIN, BTN_BACK_PIN
@@ -1576,7 +1546,7 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
    doSleep
    ══════════════════════════════════════════════════════════════════ */
 static void doSleep(TickType_t *lastWake) {
-    HAL_UART_SendLine("[UI] Entering light-sleep.");
+    HAL_UART_SendLine("[UI] Entering UI sleep.");
     MCAL_OLED_Clear();
 
     bool heartWasOn = MCAL_Heart_IsEnabled();
@@ -1585,11 +1555,27 @@ static void doSleep(TickType_t *lastWake) {
     bool micWasOn = MCAL_Mic_IsActive();           /* ← NEW */
     if (micWasOn) MicTask_SetActive(false);
 
-    configureWakeupPins();
-    esp_light_sleep_start();
+    MCAL_Button_Reset();
+    drainWakeSignals();
 
-    HAL_UART_SendLine("[UI] Woke from light-sleep.");
-    disableWakeupPins();
+    uint32_t releaseStart = (uint32_t)millis();
+    while (anyButtonPressed() &&
+           ((uint32_t)millis() - releaseStart) < 1500UL) {
+        MCAL_Button_Poll();
+        drainWakeSignals();
+        vTaskDelay(pdMS_TO_TICKS(UI_POLL_INTERVAL_MS));
+    }
+
+    MCAL_OLED_SetDisplayOn(false);
+
+    while (!anyButtonPressed()) {
+        MCAL_Button_Poll();
+        drainWakeSignals();
+        vTaskDelay(pdMS_TO_TICKS(UI_POLL_INTERVAL_MS));
+    }
+
+    MCAL_OLED_SetDisplayOn(true);
+    HAL_UART_SendLine("[UI] Woke from UI sleep.");
 
     *lastWake = xTaskGetTickCount();
 
@@ -1605,14 +1591,8 @@ static void doSleep(TickType_t *lastWake) {
     s_lastBattConnected = false;
 
     MCAL_Button_ReinitPins();
-
-    if (anyButtonPressed()) {
-        HAL_UART_SendLine("[UI] Wake button still held; input waits for release.");
-    }
     startWakeInputGuard();
 
-    HAL_I2C_Init();
-    MCAL_OLED_Init();
     applyBrightness();
 
     MCAL_Battery_ForceRefresh();

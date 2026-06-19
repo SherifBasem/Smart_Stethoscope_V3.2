@@ -48,6 +48,10 @@ void MCAL_OLED_SetBrightness(uint8_t level) {
   display.ssd1306_command(SSD1306_SETCONTRAST);
   display.ssd1306_command(level);
 }
+void MCAL_OLED_SetDisplayOn(bool on) {
+  if (!s_oledReady) return;
+  display.ssd1306_command(on ? SSD1306_DISPLAYON : SSD1306_DISPLAYOFF);
+}
 void MCAL_OLED_FlipScreen(bool flipped) {
   if (!s_oledReady) return;
   display.ssd1306_command(flipped ? SSD1306_COMSCANINC : SSD1306_COMSCANDEC);
