@@ -13,11 +13,7 @@
 /* ═══════════════════════════════════════════════════════════════════
     Private state
     ═══════════════════════════════════════════════════════════════════ */
-<<<<<<< HEAD
-static BatteryStatus_t s_status     = { 0.0f, 0, BATTERY_STATE_UNKNOWN, false, false, false, 0 };
-=======
-static BatteryStatus_t s_status     = { 0.0f, 0, BATTERY_STATE_UNKNOWN, false, false, false };
->>>>>>> Shefo's-try-to-fix-the-errors
+static BatteryStatus_t s_status     = { 0.0f, 0, 0, BATTERY_STATE_UNKNOWN, false, false, false };
 static float           s_prevV      = 0.0f;
 static uint32_t        s_lastPollMs = 0;
 static bool            s_initialised = false;
@@ -105,15 +101,11 @@ static void doSample(void) {
 
     s_status.voltageV   = v;
     s_status.percent    = pct;
+    s_status.rawAdc     = raw;
     s_status.state      = state;
     s_status.isLow      = (pct <= BATTERY_LOW_THRESHOLD_PCT);
     s_status.isCritical = (pct <= BATTERY_CRITICAL_PCT);
-<<<<<<< HEAD
-    s_status.isConnected = true;
-    s_status.rawAdc     = raw;
-=======
     s_status.isConnected = connected;
->>>>>>> Shefo's-try-to-fix-the-errors
 
 #if STETHO_DEBUG_LOGS
     HAL_UART_Printf("[Battery] %.2fV %u%% state=%d connected=%s\r\n", 

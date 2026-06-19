@@ -222,15 +222,9 @@ void MCAL_Mic_StartRecording(uint8_t maxSec) {
     if (s_state == MIC_STATE_RECORDING) return;
     if (!MCAL_Mic_IsReady()) return;
 
-<<<<<<< HEAD
-    if (maxSec == 0 || maxSec > MIC_MAX_RECORD_SEC) maxSec = MIC_MAX_RECORD_SEC;
-    if (maxSec < MIC_MIN_RECORD_SEC) maxSec = MIC_MIN_RECORD_SEC;
-    if (maxSec > s_recordCapacitySec) maxSec = s_recordCapacitySec;
-=======
     /* Enforce min/max time limits */
     if (maxSec < MIC_MIN_RECORD_SEC) maxSec = MIC_MIN_RECORD_SEC;
     if (maxSec > MIC_MAX_RECORD_SEC) maxSec = MIC_MAX_RECORD_SEC;
->>>>>>> Shefo's-try-to-fix-the-errors
 
     /* Clamp to actual buffer capacity */
     uint32_t limitSamples = (uint32_t)maxSec * MIC_SAMPLE_RATE_HZ;

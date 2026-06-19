@@ -45,21 +45,15 @@
 #include <freertos/queue.h>
 
 /* ------ Config ------ */
-#define MIC_SAMPLE_RATE_HZ       4000        /**< ADC sample rate (Hz)          */
-<<<<<<< HEAD
-#define MIC_MIN_RECORD_SEC       30          /**< Minimum useful recording (s)  */
-=======
-#define MIC_MIN_RECORD_SEC       30          /**< Minimum recording length (s)  */
->>>>>>> Shefo's-try-to-fix-the-errors
-#define MIC_MAX_RECORD_SEC       60          /**< Maximum recording length (s)  */
-#define MIC_MAX_RECORD_SAMPLES   (MIC_SAMPLE_RATE_HZ * MIC_MAX_RECORD_SEC)
-                                             /**< = 240 000 int16 samples        */
-#define MIC_LIVE_WINDOW_MS       100         /**< Window for dBSPL / peak calc  */
-#define MIC_LIVE_WINDOW_SAMPLES  (MIC_SAMPLE_RATE_HZ * MIC_LIVE_WINDOW_MS / 1000)
-                                             /**< = 400 samples                  */
-#define MIC_DB_FLOOR             30.0f       /**< Silence floor (dBSPL ref)     */
-#define MIC_DB_CEIL              90.0f       /**< Clipping ceiling (dBSPL)      */
-#define MIC_IR_FINGER_THRESHOLD  50000UL     /**< Reused from heart_mcal        */
+#define MIC_SAMPLE_RATE_HZ       4000                                               /**< ADC sample rate (Hz)          */
+#define MIC_MIN_RECORD_SEC       30                                                 /**< Minimum recording length (s)  */
+#define MIC_MAX_RECORD_SEC       60                                                 /**< Maximum recording length (s)  */
+#define MIC_MAX_RECORD_SAMPLES   (MIC_SAMPLE_RATE_HZ * MIC_MAX_RECORD_SEC)          /**< = 240 000 int16 samples       */
+#define MIC_LIVE_WINDOW_MS       100                                                /**< Window for dBSPL / peak calc  */
+#define MIC_LIVE_WINDOW_SAMPLES  (MIC_SAMPLE_RATE_HZ * MIC_LIVE_WINDOW_MS / 1000)   /**< = 400 samples                 */
+#define MIC_DB_FLOOR             30.0f                                              /**< Silence floor (dBSPL ref)     */
+#define MIC_DB_CEIL              90.0f                                              /**< Clipping ceiling (dBSPL)      */
+#define MIC_IR_FINGER_THRESHOLD  50000UL                                            /**< Reused from heart_mcal        */
 
 /* ------ Types ------ */
 

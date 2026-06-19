@@ -477,16 +477,12 @@ static void renderLungSound(QueueHandle_t micQ) {
 
     switch (micState) {
 
-        case MIC_STATE_IDLE:
+        case MIC_STATE_IDLE: {
             snprintf(header,     sizeof(header),     " Lung Sound      ");
-<<<<<<< HEAD
-            snprintf(statusLine, sizeof(statusLine), "%us [SEL]Rec [BCK]",
-                     MCAL_Mic_GetRecordCapacitySec());
-=======
             uint8_t availSec = MCAL_Mic_GetAvailableRecordSeconds();
             snprintf(statusLine, sizeof(statusLine), "Rec:%us [SEL]Rec", availSec);
->>>>>>> Shefo's-try-to-fix-the-errors
             break;
+        }
 
         case MIC_STATE_RECORDING: {
             uint8_t rem = MCAL_Mic_GetSecondsRemaining();
@@ -844,17 +840,8 @@ static void renderBatteryInfo(void) {
         case BATTERY_STATE_DISCHARGING: stateLabel = "DIS";  break;
         default:                        stateLabel = "???";  break;
     }
-<<<<<<< HEAD
-    if (s_battery.isConnected) {
-        snprintf(line, sizeof(line), " %u%%  [%s]", s_battery.percent, stateLabel);
-    } else {
-        snprintf(line, sizeof(line), " ---  [N/C]");
-    }
-    MCAL_OLED_PrintLine(3, line);
-=======
     snprintf(line, sizeof(line), " %u%%  [%s]", s_battery.percent, stateLabel);
     MCAL_OLED_PrintLine(4, line);
->>>>>>> Shefo's-try-to-fix-the-errors
 
     const uint8_t BAR_CHARS = 18;
     uint8_t filled = s_battery.isConnected
@@ -868,15 +855,8 @@ static void renderBatteryInfo(void) {
     bar[1 + BAR_CHARS] = '\0';
     MCAL_OLED_PrintLine(5, bar);
 
-<<<<<<< HEAD
-    if (!s_battery.isConnected) {
-        MCAL_OLED_PrintLine(5, " Battery not conn");
-    } else if (s_battery.isCritical) {
-        MCAL_OLED_PrintLine(5, "!! CRITICAL LOW !!");
-=======
     if (s_battery.isCritical) {
         MCAL_OLED_PrintLine(6, "!! CRITICAL LOW !!");
->>>>>>> Shefo's-try-to-fix-the-errors
     } else if (s_battery.isLow) {
         MCAL_OLED_PrintLine(6, "! Low battery");
     } else {
@@ -1299,15 +1279,11 @@ static void handleInput(ButtonEvent_t evt, QueueHandle_t wifiQ) {
             if (evt == BTN_EVENT_SELECT_PRESSED) {
                 switch (ms) {
                     case MIC_STATE_IDLE:
-<<<<<<< HEAD
-                        MCAL_Mic_StartRecording(MCAL_Mic_GetRecordCapacitySec());
-=======
                         /* Start recording with available time (between min and max) */
                         {
                             uint8_t recSeconds = MCAL_Mic_GetAvailableRecordSeconds();
                             MCAL_Mic_StartRecording(recSeconds);
                         }
->>>>>>> Shefo's-try-to-fix-the-errors
                         s_lungDirty = true;
                         break;
 
