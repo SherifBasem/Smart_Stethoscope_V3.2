@@ -46,7 +46,7 @@
 
 /* ------ Config ------ */
 #define MIC_SAMPLE_RATE_HZ       4000                                               /**< ADC sample rate (Hz)          */
-#define MIC_MIN_RECORD_SEC       1                                                  /**< Minimum recording length (s)  */
+#define MIC_MIN_RECORD_SEC       30                                                 /**< Minimum recording length (s)  */
 #define MIC_MAX_RECORD_SEC       60                                                 /**< Maximum recording length (s)  */
 #define MIC_MAX_RECORD_SAMPLES   (MIC_SAMPLE_RATE_HZ * MIC_MAX_RECORD_SEC)          /**< = 240 000 int16 samples       */
 #define MIC_RECORD_BYTES_PER_SEC (MIC_SAMPLE_RATE_HZ * 2UL)                         /**< signed 16-bit mono PCM        */

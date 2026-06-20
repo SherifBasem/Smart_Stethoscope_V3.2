@@ -5,4 +5,24 @@
 #define STETHO_DEBUG_LOGS 0
 #endif
 
+#ifndef STETHO_HF_PREDICT_PCM_URL
+#define STETHO_HF_PREDICT_PCM_URL "https://huggingface.co/spaces/sherox2345/Respiratory-Disease-Classification/predict-pcm"
+#endif
+
+#ifndef STETHO_HF_TOKEN
+#define STETHO_HF_TOKEN ""
+#endif
+
+#ifndef STETHO_HF_AUDIO_TYPE_LUNG
+#define STETHO_HF_AUDIO_TYPE_LUNG "lung"
+#endif
+
+#ifndef STETHO_HF_UPLOAD_TIMEOUT_MS
+#define STETHO_HF_UPLOAD_TIMEOUT_MS 120000UL
+#endif
+
+#ifndef STETHO_HF_UPLOAD_RETRIES
+#define STETHO_HF_UPLOAD_RETRIES 2
+#endif
+
 #endif /* STETHO_CONFIG_H */

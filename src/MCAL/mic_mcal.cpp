@@ -6,18 +6,18 @@
 
 #include "mic_mcal.h"
 #include "mic_math.h"
+#include "../stetho_config.h"
 #include "../HAL/mic_hal.h"
 #include "../HAL/uart_hal.h"
 #include <math.h>
 #include <string.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <Arduino.h>
 
 /* ═══════════════════════════════════════════════════════════════════
    ML API endpoint — update to your deployed model URL
    ═══════════════════════════════════════════════════════════════════ */
-#define MIC_ML_API_URL   "http://192.168.1.4:5000/predict"
-
 /* ═══════════════════════════════════════════════════════════════════
    Static PCM recording buffer
    240 000 int16 samples × 2 bytes = 480 KB — fits in ESP32-S3 PSRAM.
@@ -111,6 +111,49 @@ static size_t base64Encode(const uint8_t *in, size_t inLen,
     }
     out[outIdx] = '\0';
     return outIdx;
+}
+
+static bool jsonReadString(const String &body, const char *key,
+                           char *out, size_t outLen) {
+    if (!key || !out || outLen == 0) return false;
+    String needle = String("\"") + key + "\"";
+    int pos = body.indexOf(needle);
+    if (pos < 0) return false;
+
+    pos = body.indexOf(':', pos);
+    if (pos < 0) return false;
+    pos++;
+    while (pos < (int)body.length() && isspace((unsigned char)body[pos])) pos++;
+    if (pos >= (int)body.length() || body[pos] != '"') return false;
+    pos++;
+
+    int end = body.indexOf('"', pos);
+    if (end < 0) return false;
+
+    String value = body.substring(pos, end);
+    strncpy(out, value.c_str(), outLen - 1);
+    out[outLen - 1] = '\0';
+    return true;
+}
+
+static bool jsonReadFloat(const String &body, const char *key, float *out) {
+    if (!key || !out) return false;
+    String needle = String("\"") + key + "\"";
+    int pos = body.indexOf(needle);
+    if (pos < 0) return false;
+
+    pos = body.indexOf(':', pos);
+    if (pos < 0) return false;
+    pos++;
+    while (pos < (int)body.length() && isspace((unsigned char)body[pos])) pos++;
+
+    *out = body.substring(pos).toFloat();
+    return true;
+}
+
+static bool isTransientHttpFailure(int httpCode) {
+    return httpCode < 0 || httpCode == 408 || httpCode == 429 ||
+           (httpCode >= 500 && httpCode <= 599);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
