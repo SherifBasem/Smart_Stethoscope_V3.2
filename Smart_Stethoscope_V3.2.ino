@@ -44,10 +44,6 @@ static TaskHandle_t g_heartTaskHandle = NULL;
 static TaskHandle_t g_micTaskHandle   = NULL;
 
 
-<<<<<<< HEAD
-
-=======
->>>>>>> d423b4c0078ce8e08cf8ff627c0c7848ed76b37e
 static void IRAM_ATTR btn_select_isr(void *arg) {
     (void)arg;
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;

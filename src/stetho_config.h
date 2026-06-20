@@ -6,7 +6,7 @@
 #endif
 
 #ifndef STETHO_HF_PREDICT_PCM_URL
-#define STETHO_HF_PREDICT_PCM_URL "https://huggingface.co/spaces/sherox2345/Respiratory-Disease-Classification/predict-pcm"
+#define STETHO_HF_PREDICT_PCM_URL "https://sherox2345-respiratory-disease-classification.hf.space/predict-pcm"
 #endif
 
 #ifndef STETHO_HF_TOKEN

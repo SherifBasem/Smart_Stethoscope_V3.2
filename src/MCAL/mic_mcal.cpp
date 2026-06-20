@@ -12,12 +12,10 @@
 #include <math.h>
 #include <string.h>
 #include <HTTPClient.h>
+#include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <Arduino.h>
 
-/* ═══════════════════════════════════════════════════════════════════
-   ML API endpoint — update to your deployed model URL
-   ═══════════════════════════════════════════════════════════════════ */
 /* ═══════════════════════════════════════════════════════════════════
    Static PCM recording buffer
    240 000 int16 samples × 2 bytes = 480 KB — fits in ESP32-S3 PSRAM.
@@ -469,15 +467,39 @@ void MCAL_Mic_UploadRecording(void) {
                      (unsigned long)s_recIdx,
                      (unsigned long)durMs);
 
+    if (WiFi.status() != WL_CONNECTED) {
+        HAL_UART_SendLine("[Mic] Upload failed: WiFi is not connected.");
+        strncpy(s_mlResult.diagnosis, "WiFi offline",
+                sizeof(s_mlResult.diagnosis) - 1);
+        s_mlResult.confidence = 0.0f;
+        s_mlResult.valid      = false;
+        s_state = MIC_STATE_UPLOAD_ERR;
+        return;
+    }
+
     /* HTTP POST: raw PCM streaming to avoid large heap allocations */
+    WiFiClientSecure secureClient;
+    secureClient.setInsecure();
+
     HTTPClient http;
-    http.begin(MIC_ML_API_URL);
+    if (!http.begin(secureClient, STETHO_HF_PREDICT_PCM_URL)) {
+        HAL_UART_SendLine("[Mic] Upload failed: invalid ML API URL.");
+        strncpy(s_mlResult.diagnosis, "Bad API URL",
+                sizeof(s_mlResult.diagnosis) - 1);
+        s_mlResult.confidence = 0.0f;
+        s_mlResult.valid      = false;
+        s_state = MIC_STATE_UPLOAD_ERR;
+        return;
+    }
+
     http.addHeader("Content-Type", "application/octet-stream");
+    http.addHeader("Authorization", String("Bearer ") + STETHO_HF_TOKEN);
     http.addHeader("X-Sample-Rate", String(MIC_SAMPLE_RATE_HZ));
     http.addHeader("X-Channels", "1");
     http.addHeader("X-Encoding", "pcm_s16le");
     http.addHeader("X-Duration-Ms", String(durMs));
-    http.setTimeout(30000);   /* 30 s — large payload */
+    http.addHeader("X-Audio-Type", STETHO_HF_AUDIO_TYPE_LUNG);
+    http.setTimeout(STETHO_HF_UPLOAD_TIMEOUT_MS);
 
     int httpCode = http.sendRequest("POST", (uint8_t *)s_pcmBuf, pcmBytes);
 
@@ -514,8 +536,11 @@ void MCAL_Mic_UploadRecording(void) {
         s_state = MIC_STATE_UPLOAD_OK;
 
     } else {
+        String body = http.getString();
+        String error = http.errorToString(httpCode);
         http.end();
-        HAL_UART_Printf("[Mic] Upload FAILED (HTTP %d).\r\n", httpCode);
+        HAL_UART_Printf("[Mic] Upload FAILED (HTTP %d: %s). Response: %s\r\n",
+                         httpCode, error.c_str(), body.c_str());
         strncpy(s_mlResult.diagnosis, "Upload error",
                 sizeof(s_mlResult.diagnosis) - 1);
         s_mlResult.confidence = 0.0f;

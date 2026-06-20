@@ -184,7 +184,7 @@ bool MCAL_Mic_GetLiveReading(MicLiveReading_t *out);
 
 /**
  * @brief  Upload the completed PCM buffer to the ML model API.
- *         Encodes PCM as base64, POSTs JSON to MIC_ML_API_URL.
+ *         POSTs raw PCM to STETHO_HF_PREDICT_PCM_URL.
  *         Call from UI_Task after state == MIC_STATE_DONE.
  *         This function BLOCKS for the duration of the HTTP request.
  *         State transitions: UPLOADING → UPLOAD_OK or UPLOAD_ERR.
